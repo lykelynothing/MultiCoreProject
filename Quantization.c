@@ -1,9 +1,34 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>		// used for the definition of int8 (int8_t in the library)
+#include <stdint.h>		// used for the definition of int8 (int8_t in the library), not really necessary since we can use char
 #include <omp.h>
-#include <math.h>
-#include <time.h>
+#include <math.h>		// used for floor function, not really necessary since we can do bitwise operation
+#include <time.h>		// used to random generate vectors
+
+/* TODO list:
+ * 
+ * 
+ *
+ * 
+ * offset = mean of the vector???????
+ * utilizing symmetric quantization discard offset, so can be better
+ *
+ * SCALE SHOULD BE CHOSEN WITH THE AIM OF MAXIMIZING DATA VARIANCE
+ * how we pre-process it/fine tune it? So what shound [a,b] be?
+ * - [min,max] when you  have something that looks like a normal distribution
+ * - [min observed, max observed] when normal distribution and vector is too big
+ * - entropy
+ * - mean squared error
+ * 
+ * Can we use PCA to precompute those datas (i.e. find a range thar preserves the most variance)?
+ * Is it computationally heavy? Is it useful?
+ *
+ * HOW TF ARE WE GONNA IMPLEMENT ALLTOALL AND ALLREDUCE?
+ *
+ *
+ *
+ * */
+
 
 int thread_count;
 
@@ -16,6 +41,10 @@ void AffineDequantization(float* out, int8_t* in, int lenght, float scale, float
 void PrintFloatVec(float* vec, int lenght, char* prompt);
 
 void PrintInt8Vec(int8_t* vec, int lenght, char* prompt);
+
+float MeanSquaredError(float* v1, float* v2, int lenght);
+
+float VectorMean(float* vec, int lenght);
 
 int main(int argc, char** argv){
 	srand((unsigned int) time(NULL));
@@ -43,7 +72,8 @@ int main(int argc, char** argv){
 
 	char* p3 = "The dequantized float list is:";
 	PrintFloatVec(dequantized_data, dim, p3);
-
+	
+	printf("The mean squared error between the two lists is: %f \n", MeanSquaredError(list, dequantized_data, dim));
 	free(list);
 	free(quantized_data);
 	free(dequantized_data);
@@ -104,6 +134,30 @@ void AffineDequantization(float* out, int8_t* in, int lenght, float scale, float
 	#pragma omp parallel for default(none) shared(out, in, lenght, scale, offset)
 	for(int i=0; i<lenght; i++)
 		out[i] = (((float) in[i]) + offset)*scale;
+}
+
+
+//MeanSquaredError between two float arrays
+float MeanSquaredError(float* v1, float* v2, int lenght){
+	float out=0;
+	#pragma omp parallel for default(none) shared(v1, v2, lenght) reduction(+:out)
+	for(int i = 0; i<lenght; i++)
+		out+= (v1[i]-v2[i])*(v1[i]-v2[i]);
+
+	out = out/(float)lenght;
+	
+	return out;
+}
+
+
+//Mean of a float array, can be used as offset of affine reduction
+float VectorMean(float* vec, int lenght){
+	float out = 0;
+	#pragma omp parallel for default(none) shared(v1,v2,lenght) reduction(+:out)
+	for(int i = 0; i<lenght; i++)
+		out+= vec[i]/(float)lenght;
+
+	return out;
 }
 
 
