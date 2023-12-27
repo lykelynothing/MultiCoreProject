@@ -29,6 +29,11 @@
  *
  * */
 
+struct q_val{
+	float mean;
+	float min;
+	float max;
+};
 
 int thread_count;
 
@@ -46,6 +51,8 @@ float MeanSquaredError(float* v1, float* v2, int lenght);
 
 float VectorMean(float* vec, int lenght);
 
+void VectorDatas(float* vec, int lenght, struct q_val* out);
+
 int main(int argc, char** argv){
 	srand((unsigned int) time(NULL));
 	thread_count = 8;
@@ -53,8 +60,11 @@ int main(int argc, char** argv){
 	int dim = strtol(argv[1], NULL, 10);
 	float* list = malloc(dim*sizeof(float));
 
-	float scale = 100.0;
+	float scale = 10.0;
 	RandFloatGenerator(list, dim, 256.0*scale);
+
+	struct q_val datas;
+	VectorDatas(list, dim, &datas);
 
 	int8_t* quantized_data = malloc(dim*sizeof(int8_t));
 	
@@ -66,6 +76,8 @@ int main(int argc, char** argv){
 
 	char* p1 = "The float list is:";
 	PrintFloatVec(list, dim,p1);
+
+	printf("Mean: %f \tMin: %f\t Max: %f\n\n\n", datas.mean, datas.min, datas.max);
 	
 	char* p2 = "The quantized int8 list is:";
 	PrintInt8Vec(quantized_data, dim, p2);
@@ -153,24 +165,53 @@ float MeanSquaredError(float* v1, float* v2, int lenght){
 //Mean of a float array, can be used as offset of affine reduction
 float VectorMean(float* vec, int lenght){
 	float out = 0;
-	#pragma omp parallel for default(none) shared(v1,v2,lenght) reduction(+:out)
+	float len = (float) len;
+	#pragma omp parallel for default(none) shared(vec,lenght, len) reduction(+:out)
 	for(int i = 0; i<lenght; i++)
-		out+= vec[i]/(float)lenght;
+		out+= vec[i]/len;
 
 	return out;
 }
 
+/* Utilizes a struct to store datas about the vector to		*
+ * quantize. The desired data to store are the mean, the	*
+ * highest value and the lowest value.				*
+ * OpenMP is used to parallelize the work and three reduction	*
+ * variables are declared to do the job.			*
+ * Those data are then used to calculate the range [a,b] to use	*
+ * in the affine or symmetric quantization.			*
+ *								*
+ * input:	input vector pointer,				*
+ *		input vector lenght,				*
+ *		output structure pointer			*/
+void VectorDatas(float* vec, int lenght, struct q_val* out){
+	float len = (float) lenght;
+	float mean = vec[0]/len;
+	float minimum = vec[0];
+	float maximum = vec[0];
+	#pragma omp parallel for default(none) shared(vec, lenght, len) \
+		reduction(+: mean) reduction(min: minimum) reduction(max: maximum)
+	for(int i=1; i<lenght;i++){
+		mean += vec[i]/len;
+		if(vec[i] < minimum)		minimum = vec[i];
+		else if(vec[i] > maximum)	maximum = vec[i];
+	}
+
+	out->mean = mean;
+	out->min = minimum;
+	out->max = maximum;
+}
 
 //Prints a vector of float values, has the option of including a text
 void PrintFloatVec(float* vec, int lenght, char* prompt){
 	printf("%s \n", prompt);
 	for (int i = 0; i<lenght; i++) printf("%f \t", vec[i]);
-	printf("\n");
+	printf("\n\n\n");
 }
 
 //Prints a vector of int values, has the option of including a text
 void PrintInt8Vec(int8_t* vec, int lenght, char* prompt){
 	printf("%s \n", prompt);
 	for (int i = 0; i<lenght; i++) printf("%d \t", vec[i]);
-	printf("\n");
+	printf("\n\n\n");
 }
