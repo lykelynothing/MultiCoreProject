@@ -5,10 +5,56 @@
 #include <math.h>		// used for floor function, not really necessary since we can do bitwise operation
 #include <time.h>		// used to random generate vectors
 
-/* TODO list:
- * 
- * 
+/* \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+ * \\\\\\\\\\\\\\\\\\\\		ROADMAP		\\\\\\\\\\\\\\\\\\\\\\\\\
+ * \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
  *
+ * We have done a uniform affine quantization algorithm (which we need
+ * to finish to set up).
+ *
+ * Some more precise and robust quantization error measures are needed
+ * because MSE is subjective to sample magnitude (vector with bigger
+ * values will have a bigger MSE regardless of the magnitude of the error
+ * itself).
+ *
+ * An idea could be to divide the MSE with the dimension of the range [a,b].
+ *
+ * Another possible measure is expectation:
+ * Expetation(erorr)=integral(e^2 p(e) de)	interval is [a,b]
+ *						p(e)=1/[a,b] if uniform
+ * 
+ * We need to make a symmetric one, so that we can improve its efficiency.
+ * And a way to reliably set up the quantization interval.
+ * 
+ * Next step are to implement other quantization algorithms.
+ * 
+ * Algorithms ideas:
+ * LBG
+ * Lloyd-Max
+ * We can attempt to use PCA to create our quantization algorithm.
+ *
+ * Then it's time to implemet ALLTOALL and ALLREDUCE MPI collectives.
+ *
+ * Then we need to set up how to select algorithm.
+ *
+ * Then we need to adjuct our algorithms with various quantization lenght
+ * and give the user a way to select this lenght.
+ *
+ * We surely need a vector dataset and a way to make it work with our program,
+ * because generating random float vector forever could generate some biases
+ * on the paper research.
+ *
+ * Then we need to use a way to measure efficency of those collectives.
+ *
+ * Then we do experiments and we write the paper.
+ *
+ * 
+ * \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+ * \\\\\\\\\\\\\\\\\\\\		FROM HERE TAKE EVERYTHING	\\\\\\\\\\\\\\\\\\\
+ * \\\\\\\\\\\\\\\\\\\\		WITH A PINCCH OF SALT		\\\\\\\\\\\\\\\\\\\
+ * \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+ *
+ * Rough ideas:
  * 
  * offset = mean of the vector???????
  * utilizing symmetric quantization discard offset, so can be better
@@ -22,12 +68,7 @@
  * 
  * Can we use PCA to precompute those datas (i.e. find a range thar preserves the most variance)?
  * Is it computationally heavy? Is it useful?
- *
- * HOW TF ARE WE GONNA IMPLEMENT ALLTOALL AND ALLREDUCE?
- *
- *
- *
- * */
+ */
 
 struct q_val{
 	float mean;
