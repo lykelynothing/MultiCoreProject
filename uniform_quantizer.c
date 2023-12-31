@@ -1,24 +1,25 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>		// used for the definition of int8 (int8_t in the library), not really necessary since we can use char
+#include <stdint.h>	
 #include <omp.h>
-#include <math.h>		// used for floor function, not really necessary since we can do bitwise operation
-#include <time.h>		// used to random generate vectors
+#include <math.h>
 
 int thread_count;
 
-void RandFloatGenerator(float* list, int lenght, float upperbound);
+void UniformAffineQuantization(int8_t* out, float* in, int lenght, float scale, float offset);
 
-void AffineQuantization(int8_t* out, float* in, int lenght, float scale, float offset);
+void UniformAffineDequantization(float* out, int8_t* in, int lenght, float scale, float offset);
 
-void AffineDequantization(float* out, int8_t* in, int lenght, float scale, float offset);
+void UniformRangedQuantization(unsigned int8_t* out, float* in, int lenght, float* min, float* max);
+
+void UniformRangedDequantization(float* out, unsigned int8_t* in, int lenght, float min, float max);
+
 
 int main(int argc, char** argv){
-	srand((unsigned int) time(NULL));
 	thread_count = 8;
 
-	int dim = strtol(argv[1], NULL, 10);
-	/*float* list = malloc(dim*sizeof(float));
+	/*int dim = strtol(argv[1], NULL, 10);
+	float* list = malloc(dim*sizeof(float));
 
 	float scale = 10.0;
 	RandFloatGenerator(list, dim, 256.0*scale);
@@ -53,27 +54,6 @@ int main(int argc, char** argv){
 	return 0;
 }
 
-
-/* generates a random vector of float parallelizing the work	*
- * on more threads and using rand_r (a thread safe version of	*
- * time.h rand that requires an explicit seed) and an		*
- * upperbound. The values are then zero meaned.			*
- *								*
- * input: pointer to float array, array lenght, upperbound	*/
-void RandFloatGenerator(float* list, int lenght, float upperbound){
-	int i=0;
-	unsigned int seed;
-	float off=upperbound/2;
-	#pragma omp parallel num_threads(thread_count)\
-		default(none) shared(list, lenght, upperbound, off) private(i, seed)
-	{
-		seed=rand();
-		#pragma omp for
-		for(i=0; i<lenght; i++)
-			list[i] = (float) rand_r(&seed) / (float) (RAND_MAX/upperbound) - off;
-	}
-}
-
 //		FLOAT32---->INT8				//
 /* Applies the affine quantization rounding to closest number	*
  * and utilizing more thread in a parallel for.			*
@@ -84,7 +64,7 @@ void RandFloatGenerator(float* list, int lenght, float upperbound){
  *		array lenght,					*
  *		scale,						*
  *		offset						*/
-void AffineQuantization(int8_t* out, float* in, int lenght, float scale, float offset){
+void UniformAffineQuantization(int8_t* out, float* in, int lenght, float scale, float offset){
 	#pragma omp parallel for default(none) shared(in, out, lenght, scale, offset)
 	for(int i=0; i<lenght; i++){
 		float quant = floor(in[i]/scale + offset + 0.5);
@@ -102,9 +82,31 @@ void AffineQuantization(int8_t* out, float* in, int lenght, float scale, float o
  *		input lenght,					*
  *		scale,						*
  *		offset						*/
-void AffineDequantization(float* out, int8_t* in, int lenght, float scale, float offset){
+void UniformAffineDequantization(float* out, int8_t* in, int lenght, float scale, float offset){
 	#pragma omp parallel for default(none) shared(out, in, lenght, scale, offset)
 	for(int i=0; i<lenght; i++)
 		out[i] = (((float) in[i]) + offset)*scale;
 }
+
+void UniformRangedQuantization(unsigned int8_t* out, float* in, int lenght, float* min, float* max){
+	float range, step;
+	MinMax(in, lenght, max, min);
+	float range = max - min;
+	float step = range / 256.0;
+	#pragma omp parallel for default(none) shared(out, in, lenght, min, step)
+	for(int i=0; i<lenght; i++){
+		float quant = floor((in[i] - min)/step);
+		out[i] = (unsigned int8_t) quant;
+	}
+}
+
+void UniformRangedDequantization(float* out, unsigned int8_t* in, int lenght, float min, float max){
+	float range, step;
+	range = max - min;
+	step = range / 256.0;
+	#pragma omp parallel for default(none) shared(out, in, lenght, step, min)
+	for(int i=0; i<lenght; i++)
+		out[i] = ((float)in[i]) * step + min;
+}
+
 

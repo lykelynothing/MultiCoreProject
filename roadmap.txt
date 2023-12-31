@@ -2,15 +2,14 @@
  * \\\\\\\\\\\\\\\\\\\\		ROADMAP		\\\\\\\\\\\\\\\\\\\\\\\\\
  * \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
  *
- * We have done a uniform affine quantization algorithm (which we need
- * to finish to set up).
- *
- * Some more precise and robust quantization error measures are needed
- * because MSE is subjective to sample magnitude (vector with bigger
- * values will have a bigger MSE regardless of the magnitude of the error
- * itself).
- *
- * An idea could be to divide the MSE with the dimension of the range [a,b].
+ We have done a uniform affine quantization algorithm (which we need
+ to finish to set up).
+ 
+ Some more precise and robust quantization error measures are needed
+ because MSE is subjective to sample magnitude (vector with bigger
+ values will have a bigger MSE regardless of the magnitude of the error
+ itself).
+ An idea could be to divide the MSE with the dimension of the range [a,b].
  *
  * Another possible measure is expectation:
  * E(e)=I(e^2 p(e) de)			interval is [a,b]
@@ -26,12 +25,12 @@
  * 
  * Next step are to implement other quantization algorithms.
  * 
- * Non linear quantization (companding) algorithm is a must.
- * It consists in apllying a non linear function to our vector to "boost
- * small values" or values that simply need more sampling and then applying
- * a uniform quantization.
- *
- * Standardized non linear function for companding are A-Low and mu-law.
+ Non linear quantization (companding) algorithm is a must.
+ It consists in apllying a non linear function to our vector to "boost
+ small values" or values that simply need more sampling and then applying
+ a uniform quantization.
+
+ Standardized non linear function for companding are A-Low and mu-law.
  *
  * Lloyd-Max is another must. In the Lloyd-Max most liekely values get
  * a smaller quantization step (compared to Companding for which smaller

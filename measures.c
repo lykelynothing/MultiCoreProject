@@ -2,12 +2,33 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <omp.h>
+#include <time.h>
 
 struct q_val{
 	float mean;
 	float min;
 	float max;
 };
+
+/* generates a random vector of float parallelizing the work	*
+ * on more threads and using rand_r (a thread safe version of	*
+ * time.h rand that requires an explicit seed) and an		*
+ * upperbound. The values are then zero meaned.			*
+ *								*
+ * input: pointer to float array, array lenght, upperbound	*/
+void RandFloatGenerator(float* list, int lenght, float upperbound){
+	int i=0;
+	unsigned int seed;
+	float off=upperbound/2;
+	#pragma omp parallel num_threads(thread_count)\
+		default(none) shared(list, lenght, upperbound, off) private(i, seed)
+	{
+		seed=rand();
+		#pragma omp for
+		for(i=0; i<lenght; i++)
+			list[i] = (float) rand_r(&seed) / (float) (RAND_MAX/upperbound) - off;
+	}
+}
 
 //MeanSquaredError between two float arrays
 float MeanSquaredError(float* v1, float* v2, int lenght){
@@ -20,6 +41,16 @@ float MeanSquaredError(float* v1, float* v2, int lenght){
 	
 	return out;
 }
+
+float NormalizedMSE(float*v1, float* v2, int lenght){
+	float out = MeanSquaredError(v1,v2, lenght);
+	float min, max, range;
+	MinMax(v1, &min, &max);
+	range = max - min;
+	out = out/range;
+	return out;
+}
+
 
 //Mean of a float array, can be used as offset of affine reduction
 float VectorMean(float* vec, int lenght){
@@ -60,6 +91,20 @@ void VectorDatas(float* vec, int lenght, struct q_val* out){
 	out->min = minimum;
 	out->max = maximum;
 }
+
+void MinMax(float* vec, int lenght, float* min, float* max){
+	float minimum = vec[0];
+	float maximum = vec[0];
+	#pragma omp parallel for default(none) shared(vec, lenght) \
+		reduction(min: minimum) reduction(max: maximum)
+	for(int i=1; i<lenght;i++){
+		if(vec[i] < minimum)		minimum = vec[i];
+		else if(vec[i] > maximum)	maximum = vec[i];
+	}
+	min = minimum;
+	max = maximum;
+}
+
 
 //Prints a vector of float values, has the option of including a text
 void PrintFloatVec(float* vec, int lenght, char* prompt){
