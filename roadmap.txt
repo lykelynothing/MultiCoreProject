@@ -31,34 +31,34 @@
  a uniform quantization.
 
  Standardized non linear function for companding are A-Low and mu-law.
- *
- * Lloyd-Max is another must. In the Lloyd-Max most liekely values get
- * a smaller quantization step (compared to Companding for which smaller
- * values get a smaller step).
- * With Lloyd-Max we want to minimaze Expecation of quantization error power.
- * We must set decision boundaries bk that works as values to round to.
- * Once we set up decision boundaries, the Lloyd-Max becomes practically a 
- * 1-NN algorithm.
- * For this reason decision boundaries must be set in the middle of two
- * reconstruction values.
- * Reconstruction values thus are:
- * yk=I(x p(x) dx) / I(p(x) dx)			interval is [bk-1, bk]
- * legenda: I->integral bk->decison boundaries yk->reconstruction values
- * Reconstruction values are also called centroids.
- * Since bk and yk are intertwined, and we know k (range of quantized values)
- * we use an algorithm similar to Masi's k-means algorithm to set those 
- * boundaries.
- * The algorithm in question:
- * ///////////////////////	LLOYD-MAX	////////////////////////////
- * 1) Start (initialize the iteration) with a random assignment of k
- *	reconstruction values (codewords)
- * 2) Using the reconstruction values, compute the boundary values as mid-points
- *	between 2 reconstruction values / codewords (nearest neighbour rule).
- * 3) Using the pdf of our signal and the boundary values, compute new
- *	reconstruction values (codewords) as centroids over the quantisation
- *	areas (conditional expectation/centroid).
- * 4) Go to 2) until update is sufficiently small (< epsilon).
- *
+
+ Lloyd-Max is another must. In the Lloyd-Max most liekely values get
+ a smaller quantization step (compared to Companding for which smaller
+ values get a smaller step).
+ With Lloyd-Max we want to minimaze Expecation of quantization error power.
+ We must set decision boundaries bk that works as values to round to.
+ Once we set up decision boundaries, the Lloyd-Max becomes practically a 
+ 1-NN algorithm.
+ For this reason decision boundaries must be set in the middle of two
+ reconstruction values.
+ Reconstruction values thus are:
+ yk=I(x p(x) dx) / I(p(x) dx)			interval is [bk-1, bk]
+ legenda: I->integral bk->decison boundaries yk->reconstruction values
+ Reconstruction values are also called centroids.
+ Since bk and yk are intertwined, and we know k (range of quantized values)
+ we use an algorithm similar to Masi's k-means algorithm to set those 
+ boundaries.
+ The algorithm in question:
+ ///////////////////////	LLOYD-MAX	////////////////////////////
+ 1) Start (initialize the iteration) with a random assignment of k
+	reconstruction values (codewords)
+ 2) Using the reconstruction values, compute the boundary values as mid-points
+	between 2 reconstruction values / codewords (nearest neighbour rule).
+ 3) Using the pdf of our signal and the boundary values, compute new
+	reconstruction values (codewords) as centroids over the quantisation
+	areas (conditional expectation/centroid).
+ 4) Go to 2) until update is sufficiently small (< epsilon).
+
  * The third must have quantization algorithm is the Vector Quantizer (VQ)
  * with Linde-Buzo-Gray (LBG) algorithm.
  * It is a multi-dimensional generalization on Lloyd-Max algorithm:
@@ -87,10 +87,6 @@
  *	expectation over the quantisation areas (the Voronoi region).
  * 4) Go to 2) until update is sufficiently small (< epsilon).
  *
- *
- * We can attempt to use PCA to create our quantization algorithm.
- * (see how much time we still have)
- *
  * Then it's time to implemet ALLTOALL and ALLREDUCE MPI collectives.
  *
  * Then we need to set up how to select algorithm.
@@ -114,7 +110,7 @@
  * affine quantization------------------------------>	uniform_quantizer.c 
  * symmetric quantization--------------------------->	uniform_quantizer.c
  * non-linear quantization-------------------------->	non_linear_quantizer.c 
- * lloyd-max algorirthm----------------------------->	vector_quantizer.c 
+ * lloyd-max algorirthm----------------------------->	lloyd_max_quantizer.c 
  * VQ/LBG algotithm--------------------------------->	vector_quantizer.c 
  * allreduce---------------------------------------->	collective.c 
  * alltoall----------------------------------------->	collective.c 

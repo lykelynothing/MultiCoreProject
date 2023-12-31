@@ -9,7 +9,7 @@
 #define MU_LAW_EXPANDER(mu, y) (sign(y) * (1.0 / mu) * ((pow(1.0 + mu, fabs(y)) - 1.0) / mu))
 #define A_LAW_EXPANDER(alpha, y) (sign(y) * (1.0 / alpha) * ((pow(1.0 + alpha, fabs(y)) - 1.0) / alpha))
 
-void NonLinearQuantization(unsigned int8_t* out, float* in, int lenght, float* min, float* max, int type){
+void NonLinearQuantization(uint8_t* out, float* in, int lenght, float* min, float* max, int type){
 	switch(type){
 		case 1:
 			#pragma omp parallel for
@@ -27,7 +27,7 @@ void NonLinearQuantization(unsigned int8_t* out, float* in, int lenght, float* m
 	UniformRangedQuantization(out, in, lenght, min, max);
 }
 
-void NonLinearDequantization(float* out, unsigned int8_t* in, int lenght, float min, float max, int type){	
+void NonLinearDequantization(float* out, uint8_t* in, int lenght, float min, float max, int type){	
 	UniformRangedDequantization(out, in, lenght, min, max);
 	
 	switch(type){

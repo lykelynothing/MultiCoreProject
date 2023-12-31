@@ -15,18 +15,21 @@ struct q_val{
  * time.h rand that requires an explicit seed) and an		*
  * upperbound. The values are then zero meaned.			*
  *								*
- * input: pointer to float array, array lenght, upperbound	*/
-void RandFloatGenerator(float* list, int lenght, float upperbound){
+ * input:	pointer to float array, array lenght,		*
+ *		lowerbound, upperbound				*/
+void RandFloatGenerator(float* list, int lenght, float lowerbound, float upperbound){
 	int i=0;
 	unsigned int seed;
-	float off=upperbound/2;
+	float range = upperbound - lowerbound;
+	float my_range = ((float)RAND_MAX)/range;
+	
 	#pragma omp parallel num_threads(thread_count)\
-		default(none) shared(list, lenght, upperbound, off) private(i, seed)
+		default(none) shared(list, lenght, my_range, lowerbound) private(i, seed)
 	{
 		seed=rand();
 		#pragma omp for
 		for(i=0; i<lenght; i++)
-			list[i] = (float) rand_r(&seed) / (float) (RAND_MAX/upperbound) - off;
+			list[i] = (float) rand_r(&seed) / my_range + lowerbound;
 	}
 }
 

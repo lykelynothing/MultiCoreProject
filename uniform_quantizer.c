@@ -10,9 +10,9 @@ void UniformAffineQuantization(int8_t* out, float* in, int lenght, float scale, 
 
 void UniformAffineDequantization(float* out, int8_t* in, int lenght, float scale, float offset);
 
-void UniformRangedQuantization(unsigned int8_t* out, float* in, int lenght, float* min, float* max);
+void UniformRangedQuantization(uint8_t* out, float* in, int lenght, float* min, float* max);
 
-void UniformRangedDequantization(float* out, unsigned int8_t* in, int lenght, float min, float max);
+void UniformRangedDequantization(float* out, uint8_t* in, int lenght, float min, float max);
 
 
 int main(int argc, char** argv){
@@ -88,7 +88,7 @@ void UniformAffineDequantization(float* out, int8_t* in, int lenght, float scale
 		out[i] = (((float) in[i]) + offset)*scale;
 }
 
-void UniformRangedQuantization(unsigned int8_t* out, float* in, int lenght, float* min, float* max){
+void UniformRangedQuantization(uint8_t* out, float* in, int lenght, float* min, float* max){
 	float range, step;
 	MinMax(in, lenght, max, min);
 	float range = max - min;
@@ -100,7 +100,7 @@ void UniformRangedQuantization(unsigned int8_t* out, float* in, int lenght, floa
 	}
 }
 
-void UniformRangedDequantization(float* out, unsigned int8_t* in, int lenght, float min, float max){
+void UniformRangedDequantization(float* out, uint8_t* in, int lenght, float min, float max){
 	float range, step;
 	range = max - min;
 	step = range / 256.0;
