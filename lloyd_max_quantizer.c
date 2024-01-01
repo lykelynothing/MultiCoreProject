@@ -25,10 +25,10 @@ void LloydMaxQuantizer(uint8_t* out, float* codebook, float* in, int lenght, flo
 
 uint8_t NearestCodeword(float element, float* codebook, int codebook_len){
 	uint8_t nearest_cluster = 0;
-	double min_dist = INFINITY;
+	float min_dist = INFINITY;
 	
 	for(int i=0; i<codebook_len; i++){
-		double dist = fabsf(codebook[i]-element);
+		float dist = fabsf(codebook[i]-element);
 		if (dist<min_dist){
 			min_dist=dist;
 			nearest_cluster = i;
@@ -52,7 +52,7 @@ void UpdateCodebook(float* input, uint8_t* assignments, float* codebook, int inp
 		codebook[cluster]+=input[i];
 	}
 
-	for (int i = 0; i<input_lenght; i++){
+	for (int i = 0; i<codebook_lenght; i++){
 		if (counts[i]!=0) codebook[i]/=counts[i];
 	}
 }
