@@ -57,3 +57,13 @@ void UpdateCodebook(float* input, uint8_t* assignments, float* codebook, int inp
 	}
 }
 
+
+void LloydMaxDequantizer(float* output, float* codebook, uint8_t* assignments, float output_lenght, int codebook_lenght){
+	for(int i = 0; i < output_lenght; i++){
+		int cluster_index = (int) assignments[i];
+
+		if (cluster_index>=0 && cluster_index < codebook_lenght) output[i] = codebook[cluster_index];
+		else printf("ERROR: invalid cluster index %d at position %d\n", cluster_index, i);
+	}
+}
+

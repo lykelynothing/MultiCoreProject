@@ -58,7 +58,7 @@ void UpdateVectorbook(float* input, uint8_t* assignments, float* vectorbook, int
 		int cluster = (int) assignment[i];
 		counts[cluster]++;
 		for(int j = 0; j<vector_lenght; j++)
-			vectorbook[cluster + j] += input[i*vector_lenght + j];
+			vectorbook[cluster*vector_lenght + j] += input[i*vector_lenght + j];
 	}
 
 	for (int i = 0; i<vectorbook_lenght; i++){
@@ -68,3 +68,17 @@ void UpdateVectorbook(float* input, uint8_t* assignments, float* vectorbook, int
 		}
 	}
 }
+
+
+void VectorDequantizer(float* output, float* vectorbook, uint8_t* assignments, float output_lenght, int codebook_lenght, int vector_lenght){
+	for(int i = 0; i < output_lenght; i++){
+		int cluster_index = (int) assignments[i];
+
+		if (cluster_index>=0 && cluster_index < codebook_lenght) {
+			for  (int j = 0; j < vector_lenght; j++)
+				output[i*vector_lenght + j] = vectorbook[cluster_index*vector_lenght + j];
+		}
+		else printf("ERROR: invalid cluster index %d at position %d\n", cluster_index, i);
+	}
+}
+
