@@ -59,39 +59,42 @@
 	areas (conditional expectation/centroid).
  4) Go to 2) until update is sufficiently small (< epsilon).
 
- * The third must have quantization algorithm is the Vector Quantizer (VQ)
- * with Linde-Buzo-Gray (LBG) algorithm.
- * It is a multi-dimensional generalization on Lloyd-Max algorithm:
- * instead of quantizing every value into another one "statically", we group 
- * each value of our vector into a group of n<N (N%n==0) elements (basically
- * creating an N dimensional vector space from our vector of original size N).
- * It's best case scenario is when our starting vector data has some
- * correlation but it's surplisingly very good also when we have uncorrelated
- * data.
- * Basically you use a M-NN algorithm to set vector as decision boundaries
- * (codevectora) when quantizing the datas.
- * To dequantize it you need the collection of codevectors (codebook) and the
- * size of it determines also the size and precision of the quantization.
- * To obtain a codebook you can use the LBG algorithm.
- * ///////////////////////	LBG ALGORITHM	/////////////////////////////
- * 1) Start (initialize the iteration) with a random assignment of N/n 
- *	n-dimensional codevectors Yk
- * 2) Using the codewords, compute the decision boundary Bk as the set of all
- *	points with equal distance between 2 reconstruction values/codevectors
- *	(the such constructed regions are also called Voronoi-regions), using
- *	the nearest neighbour rule. To assign a vector to a specific region,
- *	we use the nearest neighbour rule directly. We simply test which
- *	codevector is closest to the observed vector.
- * 3) Using the pdf of our signal and the decision boundary (Voronoi region),
- *	compute new codevectors Yk as centroids (center of mass) or conditional
- *	expectation over the quantisation areas (the Voronoi region).
- * 4) Go to 2) until update is sufficiently small (< epsilon).
+ The third must have quantization algorithm is the Vector Quantizer (VQ)
+ with Linde-Buzo-Gray (LBG) algorithm.
+ It is a multi-dimensional generalization on Lloyd-Max algorithm:
+ instead of quantizing every value into another one "statically", we group 
+ each value of our vector into a group of n<N (N%n==0) elements (basically
+ creating an N dimensional vector space from our vector of original size N).
+ It's best case scenario is when our starting vector data has some
+ correlation but it's surplisingly very good also when we have uncorrelated
+ data.
+ Basically you use a M-NN algorithm to set vector as decision boundaries
+ (codevectora) when quantizing the datas.
+ To dequantize it you need the collection of codevectors (codebook) and the
+ size of it determines also the size and precision of the quantization.
+ To obtain a codebook you can use the LBG algorithm.
+ ///////////////////////	LBG ALGORITHM	/////////////////////////////
+ 1) Start (initialize the iteration) with a random assignment of N/n 
+	n-dimensional codevectors Yk
+ 2) Using the codewords, compute the decision boundary Bk as the set of all
+	points with equal distance between 2 reconstruction values/codevectors
+	(the such constructed regions are also called Voronoi-regions), using
+	the nearest neighbour rule. To assign a vector to a specific region,
+	we use the nearest neighbour rule directly. We simply test which
+	codevector is closest to the observed vector.
+ 3) Using the pdf of our signal and the decision boundary (Voronoi region),
+	compute new codevectors Yk as centroids (center of mass) or conditional
+	expectation over the quantisation areas (the Voronoi region).
+ 4) Go to 2) until update is sufficiently small (< epsilon).
+
+ * A way to properly link up the files and debug everything is needed.
+ * It's gonna be my main focus from now on.
  *
  * Then it's time to implemet ALLTOALL and ALLREDUCE MPI collectives.
  *
  * Then we need to set up how to select algorithm.
  *
- * Then we need to adjuct our algorithms with various quantization lenght
+ * Then we need to adjust our algorithms with various quantization lenght
  * and give the user a way to select this lenght.
  *
  * We surely need a vector dataset and a way to make it work with our program,
