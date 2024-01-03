@@ -16,7 +16,14 @@ struct uint8_vec_lm{
 	float max;
 	float* codebook;
 };
-	
+
+struct uint8_vec_vq{
+	uint8_t* vec;
+	float min;
+	float max;
+	size_t vec_size;	//size of the sub-vectors of the vector vec
+	float* vectorbook;
+};
 
 float* RandFloatGenerator(size_t lenght, float lowerbound, float upperbound);
 
@@ -33,6 +40,5 @@ float MeanSquaredError(float* v1, float* v2, size_t lenght);
 float NormalizedMSE(float*v1, float* v2, size_t lenght);
 
 //float VectorMean(float* vec, int lenght);
-
 
 #endif

@@ -7,11 +7,15 @@
 #include "tools.h"
 #include "uniform_quantizer.h"
 
-#define MU_LAW_COMPANDER(mu, x) (sign(x) * (log(1 + mu * fabs(x)) / log(1 + mu)))
-#define A_LAW_COMPANDER(alpha, x) (sign(x) * (log(1 + alpha * fabs(x)) / log(1 + alpha)))
-#define MU_LAW_EXPANDER(mu, y) (sign(y) * (1.0 / mu) * ((pow(1.0 + mu, fabs(y)) - 1.0) / mu))
-#define A_LAW_EXPANDER(alpha, y) (sign(y) * (1.0 / alpha) * ((pow(1.0 + alpha, fabs(y)) - 1.0) / alpha))
+#define MU_LAW_COMPANDER(mu, x) (sign(x) * (log(1 + mu * fabsf(x)) / log(1 + mu)))
+#define A_LAW_COMPANDER(alpha, x) (sign(x) * (log(1 + alpha * fabsf(x)) / log(1 + alpha)))
+#define MU_LAW_EXPANDER(mu, y) (sign(y) * (1.0 / mu) * ((pow(1.0 + mu, fabsf(y)) - 1.0) / mu))
+#define A_LAW_EXPANDER(alpha, y) (sign(y) * (1.0 / alpha) * ((pow(1.0 + alpha, fabsf(y)) - 1.0) / alpha))
 
+
+
+//for both mu law and a law you need values in [-1,1], so we need to translate the vector into  the [-1,1] interval
+//A law needs to be expanded bc it's wrong: it assumes a different formula for values less than 1/alpha
 struct uint8_vec * NonLinearQuantization(float* in, size_t input_size, int type){
 	float* temp = malloc(input_size*sizeof(float));
 
