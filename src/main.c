@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <time.h>
 
+#include "lloyd_max_quantizer.h"
 #include "non_linear_quantizer.h"
 #include "uniform_quantizer.h"
 #include "tools.h"
@@ -18,11 +19,11 @@ int main(int argc, char** argv){
 			dim= 100;
 	}
 
-	float* vector = RandFloatGenerator(dim, 0, 5000.0);
+	float* vector = RandFloatGenerator(dim, -1000.0, 1000.0);
 	
-	struct uint8_vec * quantized = NonLinearQuantization(vector, dim, 2);
+	struct uint8_vec_lm * quantized = LloydMaxQuantizer(vector, dim);
 
-	float* dequantized = NonLinearDequantization(quantized, dim, 2);
+	float* dequantized = LloydMaxDequantizer(quantized, dim, 256);
 
 	PrintFloatVec(vector, dim, "");
 	
@@ -36,6 +37,7 @@ int main(int argc, char** argv){
 
 	free(vector);
 	free(quantized->vec);
+	free(quantized->codebook);
 	free(quantized);
 	free(dequantized);
 

@@ -7,7 +7,7 @@
 #include "tools.h"
 
 #define EPSILON 0.00001			//1e-5
-#define ITERATIONS 100
+#define ITERATIONS 1000
 
 
 //				ASSIGNMENT STEP
