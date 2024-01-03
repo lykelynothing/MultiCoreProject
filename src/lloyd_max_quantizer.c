@@ -5,36 +5,9 @@
 #include <omp.h>
 
 #include "tools.h"
-#include "lloyd_max_quantizer.h"
-
 
 #define EPSILON 0.00001			//1e-5
 #define ITERATIONS 100
-
-struct uint8_vec_lm * LloydMaxQuantizer(float* in, size_t input_size){
-	//define and allocate memory for struct and vector inside the struct
-	//memory for codebook will be allocated by RandFloatGenerator
-	struct uint8_vec_lm * out = (struct uint8_vec_lm*) malloc(sizeof(struct uint8_vec_lm));
-	out->vec = (uint8_t*) malloc(input_size*sizeof(uint8_t));
- 
-	MinMax(in, input_size, &(out->min), &(out->max));
-	//will allocate memory for the codebook and randomly generate it
-	//size of 256 is chosen due to uint8_t range (you can't codify more codeword)
-	out->codebook = RandFloatGenerator(256, out->min, out->max);
-
-	//applies the lloyd-max method for ITERATIONS times (to be fine tuned)
-	for(int i = 0; i < ITERATIONS; i++){
-		//#pragma omp parallel for default(none) shared(lenght, codebook, in, out)
-		for(int j = 0; j < input_size; j++)
-			//Assign to each value of the input vector a corresponding codeword assignment
-			out->vec[j] = NearestCodeword(in[j], out->codebook, 256);
-		//Updates the codebook (array of codeword) by taking the mean of all the vectors assigned
-		UpdateCodebook(in, out->vec, out->codebook, input_size, 256);
-	}
-
-	return out;
-
-}
 
 
 //				ASSIGNMENT STEP
@@ -88,6 +61,30 @@ void UpdateCodebook(float* input, uint8_t* assignments, float* codebook, size_t 
 }
 
 
+struct uint8_vec_lm * LloydMaxQuantizer(float* in, size_t input_size){
+	//define and allocate memory for struct and vector inside the struct
+	//memory for codebook will be allocated by RandFloatGenerator
+	struct uint8_vec_lm * out = (struct uint8_vec_lm*) malloc(sizeof(struct uint8_vec_lm));
+	out->vec = (uint8_t*) malloc(input_size*sizeof(uint8_t));
+ 
+	MinMax(in, input_size, &(out->min), &(out->max));
+	//will allocate memory for the codebook and randomly generate it
+	//size of 256 is chosen due to uint8_t range (you can't codify more codeword)
+	out->codebook = RandFloatGenerator(256, out->min, out->max);
+
+	//applies the lloyd-max method for ITERATIONS times (to be fine tuned)
+	for(int i = 0; i < ITERATIONS; i++){
+		//#pragma omp parallel for default(none) shared(lenght, codebook, in, out)
+		for(int j = 0; j < input_size; j++)
+			//Assign to each value of the input vector a corresponding codeword assignment
+			out->vec[j] = NearestCodeword(in[j], out->codebook, 256);
+		//Updates the codebook (array of codeword) by taking the mean of all the vectors assigned
+		UpdateCodebook(in, out->vec, out->codebook, input_size, 256);
+	}
+
+	return out;
+
+}
 
 
 float * LloydMaxDequantizer(struct uint8_vec_lm * in, size_t input_size, size_t codebook_size){
