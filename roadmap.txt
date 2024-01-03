@@ -109,7 +109,7 @@
  * ///////////////////		FILE SEPARATION			///////////////////
  * ///////////////////		     (idea)			///////////////////
  * ////////////////////////////////////////////////////////////////////////////////
- * all error metrics and vector analytics----------->	measures.c 
+ * all error metrics and vector analytics----------->	tools.c 
  * affine quantization------------------------------>	uniform_quantizer.c 
  * symmetric quantization--------------------------->	uniform_quantizer.c
  * non-linear quantization-------------------------->	non_linear_quantizer.c 
