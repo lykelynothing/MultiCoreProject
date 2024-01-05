@@ -63,11 +63,23 @@ void PrintFloatVec(float* vec, size_t lenght, char* prompt){
 }
 
 //Prints a vector of int values, has the option of including a text
-void PrintInt8Vec(uint8_t* vec, size_t lenght, char* prompt){
+void PrintInt64Vec(uint64_t* vec, size_t lenght, char* prompt){
 	printf("%s \n", prompt);
 	for (int i = 0; i < lenght; i++) printf("%d \t", vec[i]);
 	printf("\n\n\n");
 }
+
+void PrintVectorbook(struct vector_quant* in, char* prompt){
+	printf("%s", prompt);
+	for (int i = 0; i < 256; i++){
+		size_t vector_size = in->vec_size;
+		printf("\nvector[%d]\t", i);
+		for(int j = 0; j < vector_size; j++)
+			printf("\t%f\t", in->vectorbook[i*vector_size + j]);
+	}
+	printf("\n\n\n");
+}
+
 
 float sign(float x){
 	if (x >=0) return 1.0;

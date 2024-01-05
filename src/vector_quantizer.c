@@ -8,15 +8,16 @@
 
 #define ITER 100
 
-uint8_t NearestCodevector(float* vector, float* vectorbook, size_t vector_size, size_t vectorbook_size, int index){
-	uint8_t nearest_vector = 0;
+
+uint64_t NearestCodevector(float* vector, float* vectorbook, size_t vector_size, int index){
+	uint64_t nearest_vector = 0;
 	float min_dist = INFINITY;
 
-	for (uint8_t i = 0; i < vectorbook_size; i++){
+	for (uint64_t i = 0; i < REPR_RANGE; i++){
 		float dist = 0;
-		for (int j = 0; j < vector_size; j++)
-			dist += ((vector[index + j] - vectorbook[i*vector_size + j]) \
-				* (vector[index + j] - vectorbook[i*vector_size + j]));
+		for (int j = 0; j < vector_size; j++){
+			dist += ((vector[index + j] - vectorbook[i*vector_size + j]) * (vector[index + j] - vectorbook[i*vector_size + j]));
+		}
 		dist = sqrtf(dist);
 
 		if (dist<min_dist){
@@ -24,30 +25,29 @@ uint8_t NearestCodevector(float* vector, float* vectorbook, size_t vector_size, 
 			nearest_vector = i;
 		}
 	}
-
 	return nearest_vector;
 }
 
 
-void UpdateVectorbook(float* input, uint8_t* assignments, float* vectorbook, size_t input_size, size_t vectorbook_size, size_t vector_size){
-	int counts[vectorbook_size];
+void UpdateVectorbook(float* input, struct compressed* assignments, float* vectorbook, size_t input_size, size_t vector_size){
+	int counts[REPR_RANGE];
 
 	size_t vector_number = input_size / vector_size;
 
-	for (int i = 0; i < vectorbook_size; i++){
+	for (int i = 0; i < REPR_RANGE; i++){
 		counts[i] = 0;
 		for (int j = 0; j < vector_size; j++)
 			vectorbook[i * vector_size + j] = 0;
 	}
 
 	for (int i = 0; i < vector_number; i++){
-		int cluster = (int) assignments[i];
+		int cluster = (int) assignments[i].number;
 		counts[cluster]++;
-		for(int j = 0; j<vector_size; j++)
+		for(int j = 0; j < vector_size; j++)
 			vectorbook[cluster*vector_size + j] += input[i*vector_size + j];
 	}
 
-	for (int i = 0; i<vectorbook_size; i++){
+	for (int i = 0; i < REPR_RANGE; i++){
 		if(counts[i]!=0){
 			for (int j = 0; j<vector_size; j++)
 				vectorbook[i*vector_size + j] /= counts[i];
@@ -55,7 +55,8 @@ void UpdateVectorbook(float* input, uint8_t* assignments, float* vectorbook, siz
 	}
 }
 
-struct uint8_vec_vq * LBGVectorQuantizer(float* in, size_t input_size, size_t vector_size){
+
+struct vector_quant* LBGVectorQuantizer(float* in, size_t input_size, size_t vector_size){
 	//check if you can divide the original vector into subvectors of dimension vector_size
 	if (input_size%vector_size!=0){
 		printf("ERROR: input_size %ld not divisible by vector_size %ld", \
@@ -64,20 +65,20 @@ struct uint8_vec_vq * LBGVectorQuantizer(float* in, size_t input_size, size_t ve
 	}
 	
 	//allocate memory for the struct and sets its value, starting with a randomized starting vectorbook
-	struct uint8_vec_vq * out = (struct uint8_vec_vq*) malloc(sizeof(struct uint8_vec_vq));
+	struct vector_quant* out = (struct vector_quant*) malloc(sizeof(struct vector_quant));
 	out->vec_size = vector_size;
 	MinMax(in, input_size, &(out->min), &(out->max));
-	out->vectorbook = RandFloatGenerator(256*vector_size, out->min, out->max);
-
+	out->vectorbook = RandFloatGenerator(REPR_RANGE*vector_size, out->min, out->max);
+	out->vec = (struct compressed*) malloc(REPR_RANGE*sizeof(struct compressed));
+	
 	//needed for the size of  innerloop of LBG algorithm
 	size_t vector_number = input_size / vector_size;
 
 	for (int i = 0; i<ITER; i++){
 	//	#pragma omp parallel for default(none) shared(in, out, vector_number, vector_size)
 		for(int j = 0; j < vector_number; j++)
-			out->vec[j] = NearestCodevector(in, out->vectorbook, vector_size, 256, j);
-
-		UpdateVectorbook(in, out->vec, out->vectorbook, input_size, 256, vector_size);
+			out->vec[j].number = NearestCodevector(in, out->vectorbook, vector_size, j);
+		UpdateVectorbook(in, out->vec, out->vectorbook, input_size, out->vec_size);
 	}
 
 	return out;
@@ -85,14 +86,14 @@ struct uint8_vec_vq * LBGVectorQuantizer(float* in, size_t input_size, size_t ve
 
 
 
-float* LBGVectorDequantizer(struct uint8_vec_vq * in, size_t input_lenght, size_t vectorbook_size){
-	float* out = malloc(input_lenght*sizeof(float));
+float* LBGVectorDequantizer(struct vector_quant* in, size_t input_size){
+	float* out = malloc(input_size*sizeof(float));
 	
 	size_t vector_size = in->vec_size;
-	size_t vector_number = input_lenght / vector_size;
+	size_t vector_number = input_size / vector_size;
 
 	for(int i = 0; i < vector_number; i++){
-		int8_t cluster_index = in->vec[i];
+		uint64_t cluster_index = in->vec[i].number;
 		for  (int j = 0; j < vector_size; j++)
 			out[i*vector_size + j] = in->vectorbook[cluster_index*vector_size + j];
 	}

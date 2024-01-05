@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <time.h>
 
+#include "vector_quantizer.h"
 #include "lloyd_max_quantizer.h"
 #include "non_linear_quantizer.h"
 #include "uniform_quantizer.h"
@@ -16,31 +17,39 @@ int main(int argc, char** argv){
 			dim = (size_t) strtol(argv[1], NULL, 10);
 			break;
 		default:
-			dim= 100;
+			dim= 1000;
 	}
 
-	float* vector = RandFloatGenerator(dim, -1000.0, 1000.0);
-	
-	struct uint8_vec_lm * quantized = LloydMaxQuantizer(vector, dim);
+	dim++;
 
-	float* dequantized = LloydMaxDequantizer(quantized, dim, 256);
+	/*float* vector = RandFloatGenerator(dim, -1000.0, 1000.0);
+
+	size_t vector_size = 2;
+	
+
+	struct uint8_vec_vq * quantized = LBGVectorQuantizer(vector, dim, vector_size);
+
+	float* dequantized = LBGVectorDequantizer(quantized, dim, 256);
 
 	PrintFloatVec(vector, dim, "");
 	
 	char* p1 = "the quantized vector is";
 	PrintInt8Vec(quantized->vec, dim, p1);
 
-	char* p2 = "the dequantized vector is";
-	PrintFloatVec(dequantized, dim, p2);
+	char* p2 = "the vectorbook is";
+	PrintVectorbook(quantized, p2);
+
+	char* p3 = "the dequantized vector is";
+	PrintFloatVec(dequantized, dim, p3);
 
 	printf("the MSE is: \t %f \n", MeanSquaredError(vector, dequantized, dim));
 
 	free(vector);
 	free(quantized->vec);
-	free(quantized->codebook);
+	free(quantized->vectorbook);
 	free(quantized);
 	free(dequantized);
-
+*/
 	return 0;
 	
 /*	float* list = malloc(dim*sizeof(float));

@@ -4,9 +4,9 @@
 #include <stdlib.h>
 #include "tools.h"
 
-struct uint8_vec * NonLinearQuantization(float* in, size_t input_size, int type);
+struct non_linear_quant* NonLinearQuantization(float* in, size_t input_size, int type);
 
-float* NonLinearDequantization(struct uint8_vec* in, size_t input_size, int type);
+float* NonLinearDequantization(struct non_linear_quant* in, size_t input_size);
 
 #endif
 
