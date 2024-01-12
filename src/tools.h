@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#define BITS 16
+#define BITS 8
 #define REPR_RANGE (1 << BITS) 
 
 struct compressed {

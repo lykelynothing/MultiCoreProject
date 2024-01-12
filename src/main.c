@@ -1,57 +1,49 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <mpi.h>
 
 #include "vector_quantizer.h"
 #include "lloyd_max_quantizer.h"
 #include "non_linear_quantizer.h"
 #include "uniform_quantizer.h"
 #include "tools.h"
+#include "collectives.h"
 
 int main(int argc, char** argv){
 	srand(time(NULL));
 	size_t dim;
+	int my_rank, comm_sz;
 
 	switch(argc){
 		case 2:
 			dim = (size_t) strtol(argv[1], NULL, 10);
 			break;
 		default:
-			dim= 1000;
+			dim = 1000;
 	}
 
 	dim++;
+	MPI_Init(NULL, NULL);
+	MPI_Pcontrol(2);
 
-	/*float* vector = RandFloatGenerator(dim, -1000.0, 1000.0);
+	MPI_Comm_size(MPI_COMM_WORLD, &comm_sz);
+	MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
-	size_t vector_size = 2;
-	
+	float * in = RandFloatGenerator(dim, -1000.0, 1000.0);
 
-	struct uint8_vec_vq * quantized = LBGVectorQuantizer(vector, dim, vector_size);
+	// god please make this work
+	uint8_t * out = malloc(sizeof(struct compressed) * dim);
+	// inshallah
 
-	float* dequantized = LBGVectorDequantizer(quantized, dim, 256);
+	MPI_Allreduce((void *) in, (void *) out, dim, MPI_UINT64_T, MPI_SUM, MPI_COMM_WORLD);
 
-	PrintFloatVec(vector, dim, "");
-	
-	char* p1 = "the quantized vector is";
-	PrintInt8Vec(quantized->vec, dim, p1);
+	if (my_rank == 0){
+		for (int i = 0; i < dim; i++){
+			printf("out[%d] = %d \t in[%d] = %f \n", i, out[i], i, in[i]);
+		}
+	}
 
-	char* p2 = "the vectorbook is";
-	PrintVectorbook(quantized, p2);
-
-	char* p3 = "the dequantized vector is";
-	PrintFloatVec(dequantized, dim, p3);
-
-	printf("the MSE is: \t %f \n", MeanSquaredError(vector, dequantized, dim));
-
-	free(vector);
-	free(quantized->vec);
-	free(quantized->vectorbook);
-	free(quantized);
-	free(dequantized);
-*/
-	return 0;
-	
 /*	float* list = malloc(dim*sizeof(float));
 
 	float scale = 10.0;
@@ -86,5 +78,11 @@ int main(int argc, char** argv){
 	free(dequantized_data);
 	return 0*/ 
 
+	free(in);
+	free(out);
+
+	MPI_Finalize();
+
+	return 0;
 }
 

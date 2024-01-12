@@ -59,7 +59,7 @@ void UpdateCodebook(float* input, struct compressed* assignments, float* codeboo
 	}
 }
 
-
+// TODO: write what this input size corresponds to (bytes/count)
 struct lloyd_max_quant * LloydMaxQuantizer(float* in, size_t input_size){
 	//define and allocate memory for struct and vector inside the struct
 	//memory for codebook will be allocated by RandFloatGenerator
