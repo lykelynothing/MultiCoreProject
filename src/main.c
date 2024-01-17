@@ -11,7 +11,7 @@
 #include "collectives.h"
 
 int main(int argc, char** argv){
-	srand(time(NULL));
+/*	srand(time(NULL));
 	size_t dim;
 	int my_rank, comm_sz;
 
@@ -23,7 +23,6 @@ int main(int argc, char** argv){
 			dim = 1000;
 	}
 
-	dim++;
 	MPI_Init(NULL, NULL);
 	MPI_Pcontrol(2);
 
@@ -44,44 +43,31 @@ int main(int argc, char** argv){
 		}
 	}
 
-/*	float* list = malloc(dim*sizeof(float));
-
-	float scale = 10.0;
-
-	RandFloatGenerator(list, dim, 256.0*scale, -256.0*scale);
-
- 	struct q_val datas;
-	VectorDatas(list, dim, &datas); 
-
-	int8_t* quantized_data = malloc(dim*sizeof(int8_t));
-	
-	UniformAffineQuantization(quantized_data, list, dim, scale, 0);
-
-	float* dequantized_data = malloc(dim*sizeof(float));
-
-	UniformAffineDequantization(dequantized_data, quantized_data, dim, scale, 0);
-
-	char* p1 = "The float list is:";
-	PrintFloatVec(list, dim,p1);
-
-	printf("Mean: %f \tMin: %f\t Max: %f\n\n\n", datas.mean, datas.min, datas.max);
-	
-	char* p2 = "The quantized int8 list is:";
-	PrintInt8Vec(quantized_data, dim, p2);
-
-	char* p3 = "The dequantized float list is:";
-	PrintFloatVec(dequantized_data, dim, p3);
-	
-	printf("The mean squared error between the two lists is: %f \n", MeanSquaredError(list, dequantized_data, dim));
-	free(list);
-	free(quantized_data);
-	free(dequantized_data);
-	return 0*/ 
-
 	free(in);
 	free(out);
 
 	MPI_Finalize();
+	*/ 
+
+	srand(time(NULL));
+
+	size_t dim = 1000;
+
+	float* original = RandFloatGenerator(dim, -10000, 10000);
+
+	struct unif_quant* quantized = UniformRangedQuantization(original, dim);
+
+	float* dequantized = UniformRangedDequantization(quantized, dim);
+
+	printf("Here's the results: \n INDEX \t ORIGINAL \t QUANT \t DEQUANT \n");
+	for(int i = 0; i < dim; i++)
+		printf("%d:\t %f \t %d \t %f \n", i, original[i], quantized->vec[i].number, dequantized[i]);
+	
+	printf("MSE is: %f\n", MeanSquaredError(original, dequantized, dim));
+
+	free(original);
+	free(quantized);
+	free(dequantized);
 
 	return 0;
 }

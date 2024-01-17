@@ -7,7 +7,7 @@
 #include "tools.h"
 
 #define EPSILON 0.00001			//1e-5
-#define ITERATIONS 1000
+#define ITERATIONS 5
 
 
 //				ASSIGNMENT STEP
@@ -15,7 +15,7 @@
  * uint64_t value corresponding to the index of the closest (abs value	*
  * distance).								*/
 uint64_t NearestCodeword(float element, float* codebook){
-	uint64_t nearest_cluster = 0;
+	uint64_t nearest_cluster = REPR_RANGE + 1;
 	float min_dist = INFINITY;
 	
 	for(int i=0; i<REPR_RANGE; i++){
@@ -25,7 +25,13 @@ uint64_t NearestCodeword(float element, float* codebook){
 			nearest_cluster = i;
 		}
 	}
-	return nearest_cluster;
+
+	if (nearest_cluster != REPR_RANGE + 1)
+		return nearest_cluster;
+	else{
+		printf("ERROR! Nearest cluster = NULL\n");
+		return 0;
+	}
 }
 
 
@@ -84,14 +90,14 @@ struct lloyd_max_quant * LloydMaxQuantizer(float* in, size_t input_size){
 }
 
 
-float * LloydMaxDequantizer(struct lloyd_max_quant * in, size_t input_size, size_t codebook_size){
+float * LloydMaxDequantizer(struct lloyd_max_quant * in, size_t input_size){
 	
 	float* out = malloc(input_size*sizeof(float));
 
 	for(int i = 0; i < input_size; i++){
 		int cluster_index = (int) in->vec[i].number;
 
-		if (cluster_index>=0 && cluster_index < codebook_size) out[i] = in->codebook[cluster_index];
+		if (cluster_index>=0 && cluster_index < REPR_RANGE - 1) out[i] = in->codebook[cluster_index];
 		else printf("ERROR: invalid cluster index %d at position %d\n", cluster_index, i);
 	}
 

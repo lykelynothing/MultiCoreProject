@@ -4,6 +4,7 @@
 #include <mpi.h>
 #include <string.h>
 
+#include "tools.h"
 #include "lloyd_max_quantizer.h"
 #include "non_linear_quantizer.h"
 #include "uniform_quantizer.h"
@@ -15,55 +16,48 @@
  * it executes a normal Allreduce collective throufh PMPI_Allreduce. */
 // TODO: free all this shit
 int MPI_Allreduce(const void * sendbuf, void * recvbuf, 
-    int count, MPI_Datatype datatype, MPI_Op op, MPI_Comm comm){
+        int count, MPI_Datatype datatype, MPI_Op op, MPI_Comm comm){
 
-    char * env_var = getenv("QUANT_ALGO");
-    printf("Env_var = %s \n", env_var);
+        char * env_var = getenv("QUANT_ALGO");
+        printf("Env_var = %s \n", env_var);
 
-    if (env_var == NULL) {
-        return PMPI_Allreduce(sendbuf, recvbuf, count, datatype, op, comm);
-    }
+        if (env_var == NULL)
+                return PMPI_Allreduce(sendbuf, recvbuf, count, datatype, op, comm);
 
-    struct compressed * vec_struct;
-    uint8_t * results = malloc(sizeof(uint8_t) * count);
+        struct compressed * vec_struct;
+        uint8_t * results = malloc(sizeof(uint8_t) * count);
 
-    if (strcmp(env_var, "LLOYD") == 0){
-        struct lloyd_max_quant * local_res;
-        local_res = LloydMaxQuantizer((float *) sendbuf, count);
-        vec_struct = local_res -> vec;
-    }
+        if (strcmp(env_var, "LLOYD") == 0){
+                struct lloyd_max_quant * local_res;
+                local_res = LloydMaxQuantizer((float *) sendbuf, count);
+                vec_struct = local_res -> vec;
 
-    else if (strcmp(env_var, "NON_LINEAR") == 0)
-    {
-        char *string_type_env = getenv("NON_LINEAR_TYPE");
-        int type;
-        if (string_type_env != NULL)
-            type = atoi(string_type_env);
-        else {
-            printf("\nERROR : Couldn't find a type env_var, aborting...\n\n");
-            return MPI_ERR_UNKNOWN;
-        }
-        struct non_linear_quant * local_res;
-        local_res = NonLinearQuantization((float *) sendbuf, count, type);
-        vec_struct = local_res -> vec;
+        } else if (strcmp(env_var, "NON_LINEAR") == 0){
+                char *string_type_env = getenv("NON_LINEAR_TYPE");
+                int type;
 
+                if (string_type_env != NULL)
+                        type = atoi(string_type_env);
+                else {
+                        printf("\nERROR : Couldn't find a type env_var, aborting...\n\n");
+                        return MPI_ERR_UNKNOWN;
+                }
 
-    }
+                struct non_linear_quant * local_res;
+                local_res = NonLinearQuantization((float *) sendbuf, count, type);
+                vec_struct = local_res -> vec;
 
-    else if (strcmp(env_var, "UNIFORM") == 0){
-        struct unif_quant * local_res;
-        local_res = UniformRangedQuantization((float *) sendbuf, count);
-        vec_struct = local_res -> vec;
-    }
-
-    else if (strcmp(env_var, "NULL") == 0) {
-        return PMPI_Allreduce(sendbuf, recvbuf, count, datatype, op, comm);
-    }
-    
-    for (int i = 0; i < count; i++){
-        results[i] = vec_struct[i].number;
-    }
+        } else if (strcmp(env_var, "UNIFORM") == 0){
+                struct unif_quant * local_res;
+                local_res = UniformRangedQuantization((float *) sendbuf, count);
+                vec_struct = local_res -> vec;
+        
+        } else if (strcmp(env_var, "NULL") == 0)            //i think this is not usefull due to previous if(env_var== NULL) but not sure
+                return PMPI_Allreduce(sendbuf, recvbuf, count, datatype, op, comm);
+        
+        for (int i = 0; i < count; i++)
+                results[i] = vec_struct[i].number;
 
 
-    return PMPI_Allreduce((void *) results, (void *) recvbuf, count, MPI_UINT64_T, op, comm);
+        return PMPI_Allreduce((void *) results, (void *) recvbuf, count, MPI_UINT64_T, op, comm);
 }

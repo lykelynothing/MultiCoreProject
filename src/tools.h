@@ -55,6 +55,4 @@ float MeanSquaredError(float* v1, float* v2, size_t lenght);
 
 float NormalizedMSE(float*v1, float* v2, size_t lenght);
 
-//float VectorMean(float* vec, int lenght);
-
 #endif

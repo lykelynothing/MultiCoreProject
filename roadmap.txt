@@ -87,15 +87,15 @@
 	expectation over the quantisation areas (the Voronoi region).
  4) Go to 2) until update is sufficiently small (< epsilon).
 
- * A way to properly link up the files and debug everything is needed.
- * It's gonna be my main focus from now on.
- *
+ A way to properly link up the files and debug everything is needed.
+ It's gonna be my main focus from now on.
+
  * Then it's time to implemet ALLTOALL and ALLREDUCE MPI collectives.
  *
  * Then we need to set up how to select algorithm.
  *
- * Then we need to adjust our algorithms with various quantization lenght
- * and give the user a way to select this lenght.
+ Then we need to adjust our algorithms with various quantization lenght
+ and give the user a way to select this lenght.
  *
  * We surely need a vector dataset and a way to make it work with our program,
  * because generating random float vector forever could generate some biases
