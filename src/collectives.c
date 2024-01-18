@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <mpi.h>
 #include <string.h>
+#include <time.h>
 
 #include "tools.h"
 #include "lloyd_max_quantizer.h"
@@ -17,6 +18,8 @@
 // TODO: free all this shit
 int MPI_Allreduce(const void * sendbuf, void * recvbuf, 
         int count, MPI_Datatype datatype, MPI_Op op, MPI_Comm comm){
+    clock_t start, end;
+    double cpu_time;
 
         char * env_var = getenv("QUANT_ALGO");
         printf("Env_var = %s \n", env_var);
@@ -53,11 +56,20 @@ int MPI_Allreduce(const void * sendbuf, void * recvbuf,
                 vec_struct = local_res -> vec;
         
         } else if (strcmp(env_var, "NULL") == 0)            //i think this is not usefull due to previous if(env_var== NULL) but not sure
-                return PMPI_Allreduce(sendbuf, recvbuf, count, datatype, op, comm);
-        
+                start = clock();
+        int res = PMPI_Allreduce(sendbuf, recvbuf, count, datatype, op, comm);
+        end = clock();
+        cpu_time = ((double)(end - start)) / CLOCKS_PER_SEC;
+        printf("CPU time %lf \n", cpu_time);
+        return res;
+    
         for (int i = 0; i < count; i++)
                 results[i] = vec_struct[i].number;
 
-
-        return PMPI_Allreduce((void *) results, (void *) recvbuf, count, MPI_UINT64_T, op, comm);
+    start = clock();
+        int res = PMPI_Allreduce((void *) results, (void *) recvbuf, count, MPI_UINT64_T, op, comm);
+    end = clock();
+    cpu_time = ((double) (end - start)) / CLOCKS_PER_SEC;
+    printf("CPU time %lf \n", cpu_time);
+    return res;
 }

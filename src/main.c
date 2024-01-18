@@ -37,11 +37,11 @@ int main(int argc, char** argv){
 
 	MPI_Allreduce((void *) in, (void *) out, dim, MPI_UINT64_T, MPI_SUM, MPI_COMM_WORLD);
 
-	if (my_rank == 0){
+/*	if (my_rank == 0){
 		for (int i = 0; i < dim; i++){
 			printf("out[%d] = %d \t in[%d] = %f \n", i, out[i], i, in[i]);
 		}
-	}
+	} */
 
 	free(in);
 	free(out);
