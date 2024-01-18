@@ -1,5 +1,5 @@
 CC = mpicc
-CFLAGS = -Wall -g -fopenmp
+CFLAGS = -Wall -g -fopenmp -I/opt/homebrew/include
 LDFLAGS = -lm
 
 SRC_DIR = src
