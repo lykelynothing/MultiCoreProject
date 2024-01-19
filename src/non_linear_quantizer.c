@@ -21,21 +21,25 @@ void MuLawCompander(float* in, size_t input_size){
 void MuLawExpander(float* in, size_t input_size){
 	//some useful values to have stored (to not compute them every time)
 	float one_over_mu = 1.0 / MU;
+	float one_plus_mu = MU + 1.0;
 	
 	for(int i = 0; i < input_size; i++)
-		in[i] = sign(in[i]) * one_over_mu * ((powf(1.0 + MU, fabsf(in[i])) - 1.0) / MU);
+		in[i] = sign(in[i]) * one_over_mu * (powf(one_plus_mu, fabsf(in[i])) - 1.0);
 }
 
 void ALawCompander(float* in, size_t input_size){
 	//some useful values to have stored (to not compute them every time)
 	float condition = 1.0 / ALPHA;
 	float one_plus_ln_a = 1.0 + logf(ALPHA);
+	float one_over_one_plus_ln_a = 1.0 / one_plus_ln_a;
+	float alpha_over_one_plus_ln_a = ALPHA * one_over_one_plus_ln_a;
 
 	for(int i = 0; i < input_size; i++){
 		float abs = fabsf(in[i]);
-		in[i] = (abs < condition) ? \
-			sign(in[i]) * (ALPHA * abs) / one_plus_ln_a : \
-			sign(in[i]) * (1 + logf(ALPHA * abs) / one_plus_ln_a);
+	//	in[i] = (abs < condition) ? \
+			sign(in[i]) * abs * alpha_over_one_plus_ln_a : \
+			sign(in[i]) * ((1 + logf(ALPHA * abs)) / one_plus_ln_a);
+
 	}
 }
 
@@ -80,7 +84,7 @@ struct compressed* NormalizedSymmetricQuantization(float* in, size_t input_size)
 	
 	float this_range = (REPR_RANGE - 1) / 2;
 	for(int i = 0; i < input_size; i++)
-		out[i].number = (uint64_t) (in[i] + 1) * this_range;
+		out[i].number = (uint64_t) ((in[i] + 1) * this_range);
 	
 	return out;
 }
@@ -90,7 +94,7 @@ float* NormalizedSymmetricDequantization(struct compressed* in, size_t input_siz
 	
 	float this_range = (REPR_RANGE - 1) / 2;
 	for(int i = 0; i < input_size; i++)
-		out[i] = ((float) in[i].number / this_range) - 1.0;
+		out[i] = ((float) in[i].number) / this_range - 1.0;
 
 	return out;
 }
@@ -101,7 +105,11 @@ float* NormalizedSymmetricDequantization(struct compressed* in, size_t input_siz
 struct non_linear_quant* NonLinearQuantization(float* in, size_t input_size, int type){
 	float min, max;
 	float* temp = RangeReducer(in, input_size, &min, &max);
-
+	
+/*	char * p2 = "Range reduced vec:";
+	printf("min: %f\t max: %f\n", min, max);
+	PrintFloatVec(temp, input_size, p2);
+*/
 	switch(type){
 		case 1:
 			MuLawCompander(temp, input_size);
@@ -114,7 +122,10 @@ struct non_linear_quant* NonLinearQuantization(float* in, size_t input_size, int
 			free(temp);
 			return NULL;
 	}
-
+	
+/*	char *p3 = "Companded vec:";
+	PrintFloatVec(temp, input_size, p3);
+*/
 	struct non_linear_quant* out = (struct non_linear_quant*) malloc(sizeof(struct non_linear_quant));
 	out->vec = NormalizedSymmetricQuantization(temp, input_size);
 	out->min = min;
@@ -122,7 +133,7 @@ struct non_linear_quant* NonLinearQuantization(float* in, size_t input_size, int
 	out->type = type;
 
 	free(temp);
-
+	
 	return out;
 }
 
@@ -130,7 +141,9 @@ struct non_linear_quant* NonLinearQuantization(float* in, size_t input_size, int
 
 float* NonLinearDequantization(struct non_linear_quant* in, size_t input_size){	
 	float* out = NormalizedSymmetricDequantization(in->vec, input_size);
-	
+/*	char* p1 = "dequantized (not expanded)";
+	PrintFloatVec(out, input_size, p1);
+*/
 	switch(in->type){
 		case 1:
 			MuLawExpander(out, input_size);
@@ -142,9 +155,11 @@ float* NonLinearDequantization(struct non_linear_quant* in, size_t input_size){
 			printf("\tERROR\t companding type not valid\n");
 			return NULL;
 	}
-
+/*	char* p2 = "a expanded";
+	PrintFloatVec(out, input_size, p2);
+*/
 	RangeRestorer(out, input_size, in->min, in->max);
-	
+
 	return out;
 }
 
