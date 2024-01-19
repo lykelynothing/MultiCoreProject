@@ -36,7 +36,7 @@ void ALawCompander(float* in, size_t input_size){
 
 	for(int i = 0; i < input_size; i++){
 		float abs = fabsf(in[i]);
-	//	in[i] = (abs < condition) ? \
+		in[i] = (abs < condition) ? \
 			sign(in[i]) * abs * alpha_over_one_plus_ln_a : \
 			sign(in[i]) * ((1 + logf(ALPHA * abs)) / one_plus_ln_a);
 
