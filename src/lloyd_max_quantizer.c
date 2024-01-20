@@ -43,45 +43,61 @@ uint64_t NearestCodeword(float element, float* codebook){
 void UpdateCodebook(float* input, struct compressed* assignments, float* codebook, size_t input_size){
 	//creates a counts vector that will count how many vector there are for each assignment
 	int counts [REPR_RANGE];
-	
-	//set the counts to 0 and reset the codebook
-	for (int i = 0; i < REPR_RANGE; i++){
-		codebook[i] = 0;
-		counts[i] = 0;
-	}
-	
-	//each component of the input vector is added to the corresponding codebook
-	//(and the corresponding count will be updated)
-	for (int i = 0; i < input_size; i++){
-		int cluster = (int) assignments[i].number;
-		counts[cluster]++;
-		codebook[cluster]+=input[i];
-	}
-
-	//for all the codebook value (with count > 0) the mean is taken
-	for (int i = 0; i < REPR_RANGE; i++){
-		if (counts[i]!=0) codebook[i]/=counts[i];
-	}
+  #pragma omp parallel	default (none) shared(counts, input, assignments, codebook, input_size)
+  {
+    //set the counts to 0 and reset the codebook
+    #pragma omp for
+  	for (int i = 0; i < REPR_RANGE; i++){
+	  	codebook[i] = 0;
+		  counts[i] = 0;
+	  }
+  	
+	  //each component of the input vector is added to the corresponding codebook
+  	//(and the corresponding count will be updated)
+    #pragma omp for
+	  for (int i = 0; i < input_size; i++){
+		  int cluster = (int) assignments[i].number;
+      #pragma omp atomic
+      counts[cluster]++;
+      #pragma omp atomic
+		  codebook[cluster]+=input[i];
+	  }
+  
+	  //for all the codebook value (with count > 0) the mean is taken
+    #pragma omp for
+	  for (int i = 0; i < REPR_RANGE; i++){
+		  if (counts[i]!=0) codebook[i]/=counts[i];
+	  }
+  }
 }
 
-// TODO: write what this input size corresponds to (bytes/count)
+/* LLoyd-Max method (also called k-means method) is an iterative method for   / 
+ * quantization that aims to find a better suited quantization interval given / 
+ * a dataset.                                                                 /  
+ * (INITIALIZATION) A random codebook (containing random values that will be  / 
+ * the thresholds) is generated. Those values are also called centroids.      / 
+ * (ASSIGNMENT STEP) Each datapoint is assigned to a centroid.                / 
+ * (UPDATE STEP) Each centroid gets updated with the mean of its assigned     / 
+ * datapoint.                                                                 / 
+ * Repeat those two many times untill you have a low enough error function or / 
+ * you've done a predefined number of iterations.                             / 
+ * Once you've done that return the codebook of centroids and the quantized   / 
+ * vector.                                                                    */
 struct lloyd_max_quant * LloydMaxQuantizer(float* in, size_t input_size){
 	//define and allocate memory for struct and vector inside the struct
-	//memory for codebook will be allocated by RandFloatGenerator
 	struct lloyd_max_quant * out = (struct lloyd_max_quant*) malloc(sizeof(struct lloyd_max_quant));
-	out->vec = (struct compressed*) malloc(input_size*sizeof(struct compressed));
- 
+	out->vec = (struct compressed*) malloc(input_size*sizeof(struct compressed)); 
 	MinMax(in, input_size, &(out->min), &(out->max));
-	//will allocate memory for the codebook and randomly generate it
+
+	// Initialization 
 	out->codebook = RandFloatGenerator(REPR_RANGE, out->min, out->max);
 
-	//applies the lloyd-max method for ITERATIONS times (to be fine tuned)
 	for(int i = 0; i < ITERATIONS; i++){
-		//#pragma omp parallel for default(none) shared(lenght, codebook, in, out)
+		#pragma omp parallel for default(none) shared(input_size, in, out)
 		for(int j = 0; j < input_size; j++)
-			//Assign to each value of the input vector a corresponding codeword assignment
+			//Assignment step 
 			out->vec[j].number = NearestCodeword(in[j], out->codebook);
-		//Updates the codebook (array of codeword) by taking the mean of all the vectors assigned
+    //Update step  
 		UpdateCodebook(in, out->vec, out->codebook, input_size);
 	}
 
@@ -92,7 +108,8 @@ struct lloyd_max_quant * LloydMaxQuantizer(float* in, size_t input_size){
 float * LloydMaxDequantizer(struct lloyd_max_quant * in, size_t input_size){
 	
 	float* out = malloc(input_size*sizeof(float));
-
+  
+  #pragma omp parallel for default(none) shared(in, out, input_size)
 	for(int i = 0; i < input_size; i++){
 		int cluster_index = (int) in->vec[i].number;
 
