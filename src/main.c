@@ -3,7 +3,6 @@
 #include <time.h>
 #include <mpi.h>
 
-#include "vector_quantizer.h"
 #include "lloyd_max_quantizer.h"
 #include "non_linear_quantizer.h"
 #include "uniform_quantizer.h"
@@ -51,18 +50,18 @@ int main(int argc, char** argv){
 
 	srand(time(NULL));
 
-	size_t dim = 1000;
+	size_t dim = 1000000;
 
 	float* original = RandFloatGenerator(dim, -10000, 10000);
 
-	struct unif_quant* quantized = UniformRangedQuantization(original, dim);
+	struct lloyd_max_quant* quantized = LloydMaxQuantizer(original, dim );
 
-	float* dequantized = UniformRangedDequantization(quantized, dim);
+	float* dequantized = LloydMaxDequantizer(quantized, dim);
 
-	printf("Here's the results: \n INDEX \t ORIGINAL \t QUANT \t DEQUANT \n");
+/*	printf("Here's the results: \n INDEX \t ORIGINAL \t QUANT \t DEQUANT \n");
 	for(int i = 0; i < dim; i++)
 		printf("%d:\t %f \t %d \t %f \n", i, original[i], quantized->vec[i].number, dequantized[i]);
-	
+	*/
 	printf("MSE is: %f\n", MeanSquaredError(original, dequantized, dim));
 
 	free(original);

@@ -6,41 +6,6 @@
 
 #include "tools.h"
 
-//		FLOAT32---->INT8				//
-/* Applies the affine quantization rounding to closest number	*
- * and utilizing more thread in a parallel for.			*
- * The result is written into an int8 array called out.		*
- *								*
- * input:	output pointer,					* 
- *		input float pointer,				*
- *		array lenght,					*
- *		scale,						*
- *		offset						*/
-void UniformAffineQuantization(int8_t* out, float* in, int lenght, float scale, float offset){
-	#pragma omp parallel for default(none) shared(in, out, lenght, scale, offset)
-	for(int i=0; i<lenght; i++){
-		float quant = floor(in[i]/scale + offset + 0.5);
-		out[i] = (quant < -128) ? INT8_MIN : (quant > 127) ? INT8_MAX : (int8_t) quant;
-	}
-}
-
-
-//		INT8---->FLOAT32				//
-/* Dequantize the int8 input array into an ourput float array	*
- * utilizing more thread in a parallel for.			*
- *								*
- * input:	output pointer,					*
- *		input pointer,					*
- *		input lenght,					*
- *		scale,						*
- *		offset						*/
-void UniformAffineDequantization(float* out, int8_t* in, int lenght, float scale, float offset){
-	#pragma omp parallel for default(none) shared(out, in, lenght, scale, offset)
-	for(int i=0; i<lenght; i++)
-		out[i] = (((float) in[i]) + offset)*scale;
-}
-
-
 /* Quantize the data partitioning the interval in equal parts,	*
  * the output is a struct pointer with the quantized vector, a	*
  * min and a max value (of the original vector).		*

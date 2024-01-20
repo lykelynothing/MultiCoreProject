@@ -8,7 +8,6 @@
 #include "lloyd_max_quantizer.h"
 #include "non_linear_quantizer.h"
 #include "uniform_quantizer.h"
-#include "vector_quantizer.h"
 
 /* Custom MPI_Allreduce that will intercept any calls to it.
  * Will look for the environment variable "QUANT_ALGO" and choose

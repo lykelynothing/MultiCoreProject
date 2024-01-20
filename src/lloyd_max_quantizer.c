@@ -6,7 +6,6 @@
 
 #include "tools.h"
 
-#define EPSILON 0.00001			//1e-5
 #define ITERATIONS 5
 
 
@@ -97,7 +96,7 @@ float * LloydMaxDequantizer(struct lloyd_max_quant * in, size_t input_size){
 	for(int i = 0; i < input_size; i++){
 		int cluster_index = (int) in->vec[i].number;
 
-		if (cluster_index>=0 && cluster_index < REPR_RANGE - 1) out[i] = in->codebook[cluster_index];
+		if (cluster_index>=0 && cluster_index < REPR_RANGE) out[i] = in->codebook[cluster_index];
 		else printf("ERROR: invalid cluster index %d at position %d\n", cluster_index, i);
 	}
 
