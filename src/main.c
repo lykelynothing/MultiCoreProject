@@ -11,7 +11,7 @@
 #include "collectives.h"
 
 int main(int argc, char** argv){
-/*	srand(time(NULL));
+	srand(time(NULL));
 	size_t dim;
 	int my_rank, comm_sz;
 
@@ -47,8 +47,8 @@ int main(int argc, char** argv){
 	free(out);
 
 	MPI_Finalize();
-	*/ 
-
+	 
+/*
 	srand(time(NULL));
 
 	size_t dim = 1000;
@@ -68,7 +68,7 @@ int main(int argc, char** argv){
 	free(original);
 	free(quantized);
 	free(dequantized);
-
+*/
 	return 0;
 }
 
