@@ -64,7 +64,8 @@ float* RangeReducer(float* in, size_t input_size, float* min, float* max){
 	float* out = malloc(input_size*sizeof(float));
 	MinMax(in, input_size, min, max);
 	float range = *max - *min;
-	
+
+	#pragma omp parallel for default(none) shared(out, in, min, range, input_size)
 	for(int i = 0; i < input_size; i++)
 		out[i] = ((in[i] - *min) * 2) / range - 1;
 	
@@ -74,6 +75,8 @@ float* RangeReducer(float* in, size_t input_size, float* min, float* max){
 
 void RangeRestorer(float* in, size_t input_size, float min, float max){
 	float range = max - min;
+	
+	#pragma omp parallel for default(none) shared(in, input_size, min, range)
 	for(int i = 0; i < input_size; i++)
 		in[i] = ((in[i] + 1) * range) / 2 + min;
 }
