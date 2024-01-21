@@ -13,9 +13,10 @@
 
 /* Custom MPI_Allreduce that will intercept any calls to it.
  * Will look for the environment variable "QUANT_ALGO" and choose
- * the quantization algorithm accordingly. Once the sendbuf is quantized,
- * it executes a normal Allreduce collective throufh PMPI_Allreduce. */
-// TODO: free all this shit
+ * the quantization algorithm accordingly (if QUANT_ALGO = NON_LINEAR 
+ * then also environment variable NON_LINEAR_TYPE will be checked).
+ * Once the sendbuf is quantized, it executes a normal Allreduce collective 
+ * through PMPI_Allreduce. */
 int MPI_Allreduce(const void *sendbuf, void *recvbuf,
                   int count, MPI_Datatype datatype, MPI_Op op, MPI_Comm comm)
 {
