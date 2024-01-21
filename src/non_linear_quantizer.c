@@ -54,7 +54,7 @@ void ALawExpander (float* in, size_t input_size){
 		float abs = fabsf(in[i]);
 		in[i] = (abs < condition) ? \
 			sign(in[i]) * abs * one_over_alpha * one_plus_ln_a : \
-			sign(in[i]) * one_over_alpha * powf(M_E, -1.0 + abs * ln_one_plus_alpha);
+			sign(in[i]) * one_over_alpha * powf(M_E, -1.0 + abs * one_plus_ln_a);
 	}
 }
 
