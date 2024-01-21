@@ -69,18 +69,6 @@ void PrintInt64Vec(uint64_t* vec, size_t lenght, char* prompt){
 	printf("\n\n\n");
 }
 
-void PrintVectorbook(struct vector_quant* in, char* prompt){
-	printf("%s", prompt);
-	for (int i = 0; i < 256; i++){
-		size_t vector_size = in->vec_size;
-		printf("\nvector[%d]\t", i);
-		for(int j = 0; j < vector_size; j++)
-			printf("\t%f\t", in->vectorbook[i*vector_size + j]);
-	}
-	printf("\n\n\n");
-}
-
-
 float sign(float x){
 	if (x >=0) return 1.0;
 	else return -1.0;
@@ -105,6 +93,40 @@ float NormalizedMSE(float*v1, float* v2, size_t lenght){
 	range = max - min;
 	out = out/range;
 	return out;
+}
+
+void swap(float *a, float *b) {
+    float temp = *a;
+    *a = *b;
+    *b = temp;
+}
+
+int partition(float arr[], int low, int high) {
+    float pivot = arr[high];
+    int i = low - 1;
+
+    for (int j = low; j < high; ++j) {
+        if (arr[j] < pivot) {
+            ++i;
+            swap(&arr[i], &arr[j]);
+        }
+    }
+
+    swap(&arr[i + 1], &arr[high]);
+    return i + 1;
+}
+
+void quicksort(float arr[], int low, int high) {
+    if (low < high) {
+        int pi = partition(arr, low, high);
+
+        quicksort(arr, low, pi - 1);
+        quicksort(arr, pi + 1, high);
+    }
+}
+
+void Quicksort(float* input, size_t dim){
+  quicksort(input, 0, (int) dim -1);
 }
 
 /*
