@@ -56,6 +56,7 @@ int main(int argc, char** argv){
 	for(int i = 0; i < dim; i++)
 		printf("%d:\t %f \t %d \t %f \n", i, original[i], quantized->vec[i].number, dequantized[i]);
 	*/
+/*
 	printf("MSE is: %f\n", MeanSquaredError(original, dequantized, dim));
 
 	free(original);
