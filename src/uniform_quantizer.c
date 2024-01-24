@@ -25,7 +25,7 @@ struct unif_quant* UniformRangedQuantization(float* in, size_t input_size){
 	//calculate the steps of the quantization
 	float range = out->max - out->min;
 	float min = out->min;
-  float step = range / REPR_RANGE;
+  	float step = range / REPR_RANGE;
 
 	#pragma omp parallel for
 	for(int i = 0; i < input_size; i++){

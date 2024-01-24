@@ -28,12 +28,47 @@ int MPI_Allreduce(const void *sendbuf, void *recvbuf,
     clock_t start, end;
     double cpu_time;
     int algo;
-    // TODO NEED TO SET ALGO VARIABLE
+    int non_linear_type;
+    int send_algo;
+    
+    char * quant_env_var;
+    char * send_algo_var;
+    char * non_linear_env;
+    
+    quant_env_var = getenv("QUANT_ALGO");
+    send_algo_var = getenv("SEND_ALGO");
+
+    // default will be recursive-halving
+    if (strcmp(send_algo_var, "RING") == 0){
+        send_algo = 1;
+    } else {
+        send_algo = 0;
+    }
+
 
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
     MPI_Comm_size(MPI_COMM_WORLD, &comm_sz);
     
-    return 1;
+    if (strcmp(quant_env_var, "LLOYD") == 0) {
+        algo = 0;
+    } else if (strcmp(quant_env_var, "NON_LINEAR") == 0) {
+        // also check for type of non_linear
+        algo = 1;
+        non_linear_env = getenv("NON_LINEAR_TYPE");
+        if (non_linear_env != NULL){
+            non_linear_type = atoi(non_linear_env);
+        } else {
+            printf("\n Error: no environment variable for non linear type found \n");
+            return MPI_ERR_OTHER;
+        }
+    } else if (strcmp(quant_env_var, "UNIFORM") == 0) {
+        algo = 2;
+    } else {
+        // call normal MPI_Allreduce
+        return PMPI_Allreduce(sendbuf, recvbuf, count, datatype, op, comm);
+    }
+    
+    return MPI_SUCCESS;
 }
 
 /* Each active node will receive the entire vector of 
@@ -206,15 +241,15 @@ void FromStructToVec(int algo, void *quantized_partial_sum_struct, uint8_t *quan
     case 0:
         struct lloyd_max_quant *res = (struct lloyd_max_quant *)quantized_partial_sum_struct;
         for (i = 0; i < dim; i++)
-            quantized_partial_sum[i] = res->vec[i].number;
+            quantized_partial_sum[i] = res->vec[i];
     case 1:
         struct non_linear_quant *res = (struct non_linear_quant *)quantized_partial_sum_struct;
         for (i = 0; i < dim; i++)
-            quantized_partial_sum[i] = res->vec[i].number;
+            quantized_partial_sum[i] = res->vec[i];
     case 2:
         struct unif_quant *res = (struct unif_quant *)quantized_partial_sum_struct;
         for (i = 0; i < dim; i++)
-            quantized_partial_sum[i] = res->vec[i].number;
+            quantized_partial_sum[i] = res->vec[i];
     }
 }
 /* Makes struct_ptr vec field point to received quantized array */

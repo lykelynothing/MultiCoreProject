@@ -5,8 +5,8 @@
 #include <stdlib.h>
 #include <mpi.h>
 
-#define BITS 8
-#define REPR_RANGE (1 << BITS) 
+extern int BITS;
+extern int REPR_RANGE;
 
 struct unif_quant{
 	uint8_t* vec;
