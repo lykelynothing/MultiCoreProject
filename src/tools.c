@@ -4,8 +4,60 @@
 #include <omp.h>
 #include <time.h>
 #include <math.h>
+#include <mpi.h>
 
 #include "tools.h"
+
+
+MPI_Datatype UnifQuantType(int array_size){
+    MPI_Datatype MPI_Unif_quant;
+    MPI_Datatype types[3] = {MPI_UINT8_T, MPI_FLOAT, MPI_FLOAT};
+    int block_lengths[3] = {array_size, 1, 1};  
+    MPI_Aint offsets[3];
+    offsets[0] = offsetof(struct unif_quant, vec);
+    offsets[1] = offsetof(struct unif_quant, min);
+    offsets[2] = offsetof(struct unif_quant, max);
+
+    MPI_Type_create_struct(3, block_lengths, offsets, types, &MPI_Unif_quant);
+    MPI_Type_commit(&MPI_Unif_quant);
+
+    return MPI_Unif_quant;
+}
+
+
+MPI_Datatype NonLinearQuantType(int array_size){
+    MPI_Datatype MPI_Non_linear_quant;
+    MPI_Datatype types[4] = {MPI_UINT8_T, MPI_FLOAT, MPI_FLOAT, MPI_INT};
+    int block_lengths[4] = {array_size, 1, 1, 1}; 
+    MPI_Aint offsets[4];
+    offsets[0] = offsetof(struct non_linear_quant, vec);
+    offsets[1] = offsetof(struct non_linear_quant, min);
+    offsets[2] = offsetof(struct non_linear_quant, max);
+    offsets[3] = offsetof(struct non_linear_quant, type);
+
+    MPI_Type_create_struct(4, block_lengths, offsets, types, &MPI_Non_linear_quant);
+    MPI_Type_commit(&MPI_Non_linear_quant);
+
+    return MPI_Non_linear_quant;
+}
+
+
+MPI_Datatype LloydMaxQuantType(int array_size){
+    MPI_Datatype MPI_Lloyd_max_quant;
+    MPI_Datatype types[4] = {MPI_UINT8_T, MPI_FLOAT, MPI_FLOAT, MPI_FLOAT};
+    int block_lengths[4] = {array_size, 1, 1, REPR_RANGE};
+    MPI_Aint offsets[4];
+    offsets[0] = offsetof(struct lloyd_max_quant, vec);
+    offsets[1] = offsetof(struct lloyd_max_quant, min);
+    offsets[2] = offsetof(struct lloyd_max_quant, max);
+    offsets[3] = offsetof(struct lloyd_max_quant, codebook);
+
+    MPI_Type_create_struct(4, block_lengths, offsets, types, &MPI_Lloyd_max_quant);
+    MPI_Type_commit(&MPI_Lloyd_max_quant);
+
+    return MPI_Lloyd_max_quant;
+}
+
 
 /* Generates a random vector of float parallelizing the work	*
  * on more threads and using rand_r (a thread safe version of	*

@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdlib.h>
+#include <mpi.h>
 
 #define BITS 8
 #define REPR_RANGE (1 << BITS) 
@@ -26,6 +27,12 @@ struct lloyd_max_quant{
 	float max;
 	float* codebook;
 };
+
+MPI_Datatype UnifQuantType(int array_size);
+
+MPI_Datatype NonLinearQuantType(int array_size);
+
+MPI_Datatype LloydMaxQuantType(int array_size);
 
 float* RandFloatGenerator(size_t lenght, float lowerbound, float upperbound);
 
