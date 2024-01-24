@@ -60,3 +60,19 @@ float* UniformRangedDequantization(struct unif_quant* in, size_t input_size){
 	return out;
 }
 
+float* UniformRangedDequantization2(struct unif_quant* in, size_t input_size, uint8_t * quantized){
+	//allocates memory for the dequantized vector
+	float* out = malloc(input_size*sizeof(float));
+	
+	//calculate dequantization steps
+	float max = in->max;
+	float min = in->min;
+	float range = max - min;
+	float step = range / REPR_RANGE;
+
+	#pragma omp parallel for default(none) shared(out, in, input_size, step, min)
+	for(int i = 0; i < input_size; i++)
+		out[i] = ((float) quantized[i]) * step + min;
+
+	return out;
+}

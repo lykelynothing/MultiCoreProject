@@ -38,10 +38,11 @@ int MPI_Allreduce(const void *sendbuf, void *recvbuf,
 
 /* Each active node will receive the entire vector of 
  * quantized data, dequantize it, sum it with its own vector, 
- * requantize the partial sum vector and send it to the next process */
-// TODO Free shit
-int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, int algo, void * struct_ptr1, void * struct_ptr2) { 
-
+ * requantize the partial sum vector and send it to the next process.
+ * For now assumes comm_sz is always divisible by 2. */
+// TODO Free stuff
+int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, int algo, float * my_numbers) { 
+    /*
     // first dequantize
     float * dequantized_1 = malloc(sizeof(float) * dim);
     float * dequantized_2 = malloc(sizeof(float) * dim);
@@ -63,32 +64,59 @@ int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, int algo, void * str
 
     free(dequantized_1);
     free(dequantized_2);
-    free(partial_sum);
+    free(partial_sum); */
 
     int remaining = comm_sz;
     int half;
-    uint8_t * rcv_buff = malloc(sizeof(u_int8_t) * dim);
+    // used to store quantized received bits
+    void * struct_ptr;
+    // used to store received quantized data
+    void * rcv_buf;
 
+    float * dequantized;
+    uint8_t * quantized;
+    float * partial_sum = my_numbers;
+    // need to send struct as well
     while (remaining != 1) {
-        half = comm_sz / 2;
+        half = remaining / 2;
         
         if (my_rank < half) {
-            // TODO put right source
             int source = half + my_rank;
-            MPI_Recv((void *) rcv_buff, dim, MPI_UINT8_T, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            // receive struct and quantized array
+            MPI_Recv(rcv_buf, dim, MPI_UINT8_T, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(struct_ptr, 1, MPI_STRUCT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            // once received dequantize it and do sum
+            // need to attach vector to struct
+
+            DequantizeVector(struct_ptr, rcv_buf, dequantized, algo, dim);
+            // probably need to free the vector allocated by the dequantizer
+
+            // sum my array with received dequantized one
+            for (int i = 0; i < dim; i++)
+                partial_sum[i] = partial_sum[i] + dequantized[i];
+        
         } else {
-            // TODO check if thiscan be non-blocking
-            // TODO put right dest
             int dest = my_rank % half;
-            MPI_Isend((void *)quantized_partial_sum, dim, MPI_UINT8_T, dest, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            // first quantize
+            struct_ptr = Quantize(partial_sum, dim , algo);
+            // extract from struct quantized array to send seperately
+            FromStructToVec(algo, struct_ptr, quantized, dim);
+
+            MPI_Isend(quantized, dim, MPI_UINT8_T, dest, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Isend(struct_ptr, 1, MPI_STRUCT, dest, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         }
         remaining = remaining / 2;
-
     }
+
+    free(quantized);
+    free(dequantized);
+    free(struct_ptr);
+    free(rcv_buf);
 }
 
 /* Function takes float vector and quantizes it according to
- * the kind of algorithm specified by int algo */
+ * the kind of algorithm specified by int algo. Returns the 
+ * struct containing the quantized vector */
 void * Quantize(float * sendbuf, int count, int algo){
     
     void * struct_ptr;
@@ -124,7 +152,9 @@ void * Quantize(float * sendbuf, int count, int algo){
     return struct_ptr;
 }
 
-void DequantizeTwoVectors(void * struct_ptr1, void * struct_ptr2, float * dequantized_1, float * dequantized_2, int algo, int dim){
+/* Same as Dequantize vector but for 2 vectors */
+void DequantizeTwoVectors(void * struct_ptr1, void * struct_ptr2, float * dequantized_1, 
+                            float * dequantized_2, int algo, int dim) {
     switch (algo)
     {
     case 0:
@@ -145,6 +175,27 @@ void DequantizeTwoVectors(void * struct_ptr1, void * struct_ptr2, float * dequan
     }
 }
 
+/* Writes into dequantized_1 the dequantized array present into 
+ * struct_ptr1.vec */
+
+// TODO modify this so that it can dequantize by receiving the array of uints8 
+// directly and only use the right struct fields
+void DequantizeVector(void * struct_ptr1, float * dequantized_1, uint8_t * quantized, int algo, int dim){
+    switch (algo)
+    {
+    case 0:
+        struct lloyd_max_quant *str1 = (struct lloyd_max_quant *)struct_ptr1;
+        dequantized_1 = LloydMaxDequantizer2(str1, dim, quantized);
+    case 1:
+        struct non_linear_quant *str1 = (struct non_linear_quant *)struct_ptr1;
+        dequantized_1 = NonLinearDequantization2(str1, dim, quantized);
+    case 2:
+        struct unif_quant *str1 = (struct unif_quant *)struct_ptr1;
+        dequantized_1 = UniformRangedDequantization2(str1, dim, quantized);
+    }
+}
+/* Extracts from quantized_partial_sum_struct 
+ * the quantized vector in the struct's vec field */
 void FromStructToVec(int algo, void *quantized_partial_sum_struct, uint8_t *quantized_partial_sum, int dim)
 {
     int i;
@@ -164,5 +215,18 @@ void FromStructToVec(int algo, void *quantized_partial_sum_struct, uint8_t *quan
         struct unif_quant *res = (struct unif_quant *)quantized_partial_sum_struct;
         for (i = 0; i < dim; i++)
             quantized_partial_sum[i] = res->vec[i].number;
+    }
+}
+/* Makes struct_ptr vec field point to received quantized array */
+void AttachStructToArray(int algo, uint8_t *quantized, void *struct_ptr)
+{
+    switch (algo)
+    {
+    case 0:
+        struct lloyd_max_quant *res = (struct lloyd_max_quant *) struct_ptr;
+    case 1:
+        struct non_linear_quant *res = (struct non_linear_quant *) struct_ptr;
+    case 2:
+        struct unif_quant *res = (struct unif_quant *) struct_ptr;
     }
 }

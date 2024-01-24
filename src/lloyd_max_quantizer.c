@@ -119,4 +119,19 @@ float * LloydMaxDequantizer(struct lloyd_max_quant * in, size_t input_size){
 
 	return out;
 }
+// just like normal Dequantizer but also directly receives in input the 
+// quantized vector rather then accessing the struct's field
+float * LloydMaxDequantizer2(struct lloyd_max_quant * in, size_t input_size, u_int8_t * quantized){
+	
+	float* out = malloc(input_size*sizeof(float));
+  
+  #pragma omp parallel for default(none) shared(in, out, input_size)
+	for(int i = 0; i < input_size; i++){
+		int cluster_index = (int) quantized[i];
 
+		if (cluster_index>=0 && cluster_index < REPR_RANGE) out[i] = in->codebook[cluster_index];
+		else printf("ERROR: invalid cluster index %d at position %d\n", cluster_index, i);
+	}
+
+	return out;
+}

@@ -106,6 +106,16 @@ float* NormalizedSymmetricDequantization(struct compressed* in, size_t input_siz
 	return out;
 }
 
+float* NormalizedSymmetricDequantization2(uint8_t * in, size_t input_size){
+	float* out = malloc(input_size*sizeof(float));
+	
+	float this_range = (REPR_RANGE - 1) / 2;
+	for(int i = 0; i < input_size; i++)
+		out[i] = ((float) in[i]) / this_range - 1.0;
+
+	return out;
+}
+
 
 
 //A law needs to be expanded bc it's wrong: it assumes a different formula for values less than 1/alpha
@@ -141,6 +151,26 @@ struct non_linear_quant* NonLinearQuantization(float* in, size_t input_size, int
 
 float* NonLinearDequantization(struct non_linear_quant* in, size_t input_size){	
 	float* out = NormalizedSymmetricDequantization(in->vec, input_size);
+	
+  switch(in->type){
+		case 1:
+			MuLawExpander(out, input_size);
+			break;
+		case 2:
+			ALawExpander(out, input_size);
+			break;
+		default:
+			printf("\tERROR\t companding type not valid\n");
+			return NULL;
+	}
+
+	RangeRestorer(out, input_size, in->min, in->max);
+
+	return out;
+}
+
+float* NonLinearDequantization2(struct non_linear_quant* in, size_t input_size, uint8_t * quantized){	
+	float* out = NormalizedSymmetricDequantization2(quantized, input_size);
 	
   switch(in->type){
 		case 1:
