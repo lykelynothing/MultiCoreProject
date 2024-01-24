@@ -7,25 +7,21 @@
 #define BITS 8
 #define REPR_RANGE (1 << BITS) 
 
-struct compressed {
-	uint64_t number : BITS;
-}__attribute__((packed));
-
 struct unif_quant{
-	struct compressed* vec;
+	uint8_t* vec;
 	float min;
 	float max;
 };
 
 struct non_linear_quant{
-	struct compressed* vec;
+	uint8_t* vec;
 	float min;
 	float max;
 	int type;
 };
 
 struct lloyd_max_quant{
-	struct compressed* vec;
+	uint8_t* vec;
 	float min;
 	float max;
 	float* codebook;
@@ -37,7 +33,7 @@ void MinMax(float* vec, size_t lenght, float* min, float* max);
 
 void PrintFloatVec(float* vec, size_t lenght, char* prompt);
 
-void PrintInt8Vec(uint64_t* vec, size_t lenght, char* prompt);
+void PrintInt8Vec(uint8_t* vec, size_t lenght, char* prompt);
 
 float sign(float x);
 

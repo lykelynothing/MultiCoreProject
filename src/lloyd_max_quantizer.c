@@ -13,7 +13,7 @@
 /* The function takes as input a float value and return as output a	*
  * uint64_t value corresponding to the index of the closest (abs value	*
  * distance).								*/
-uint64_t NearestCodeword(float element, float* codebook){
+uint8_t NearestCodeword(float element, float* codebook){
 	uint64_t nearest_cluster = REPR_RANGE + 1;
 	float min_dist = INFINITY;
 	
@@ -26,7 +26,7 @@ uint64_t NearestCodeword(float element, float* codebook){
 	}
 
 	if (nearest_cluster != REPR_RANGE + 1)
-		return nearest_cluster;
+		return (uint8_t) nearest_cluster;
 	else{
 		printf("ERROR! Nearest cluster = NULL\n");
 		return 0;
@@ -40,10 +40,10 @@ uint64_t NearestCodeword(float element, float* codebook){
  * lenght.								*
  * It reset the codebook to 0s to then updates it with the mean of the	*
  * assigned vectors.							*/
-void UpdateCodebook(float* input, struct compressed* assignments, float* codebook, size_t input_size){
+void UpdateCodebook(float* input, uint8_t* assignments, float* codebook, size_t input_size){
 	//creates a counts vector that will count how many vector there are for each assignment
 	int counts [REPR_RANGE];
-  #pragma omp parallel	default (none) shared(counts, input, assignments, codebook, input_size)
+  #pragma omp parallel
   {
     //set the counts to 0 and reset the codebook
     #pragma omp for
@@ -56,7 +56,7 @@ void UpdateCodebook(float* input, struct compressed* assignments, float* codeboo
   	//(and the corresponding count will be updated)
     #pragma omp for
 	  for (int i = 0; i < input_size; i++){
-		  int cluster = (int) assignments[i].number;
+		  int cluster = (int) assignments[i];
       #pragma omp atomic
       counts[cluster]++;
       #pragma omp atomic
@@ -86,17 +86,17 @@ void UpdateCodebook(float* input, struct compressed* assignments, float* codeboo
 struct lloyd_max_quant * LloydMaxQuantizer(float* in, size_t input_size){
 	//define and allocate memory for struct and vector inside the struct
 	struct lloyd_max_quant * out = (struct lloyd_max_quant*) malloc(sizeof(struct lloyd_max_quant));
-	out->vec = (struct compressed*) malloc(input_size*sizeof(struct compressed)); 
+	out->vec = (uint8_t*) malloc(input_size*sizeof(uint8_t)); 
 	MinMax(in, input_size, &(out->min), &(out->max));
 
 	// Initialization 
 	out->codebook = RandFloatGenerator(REPR_RANGE, out->min, out->max);
 
 	for(int i = 0; i < ITERATIONS; i++){
-		#pragma omp parallel for default(none) shared(input_size, in, out)
+		#pragma omp parallel for
 		for(int j = 0; j < input_size; j++)
 			//Assignment step 
-			out->vec[j].number = NearestCodeword(in[j], out->codebook);
+			out->vec[j] = NearestCodeword(in[j], out->codebook);
     //Update step  
 		UpdateCodebook(in, out->vec, out->codebook, input_size);
 	}
@@ -105,13 +105,12 @@ struct lloyd_max_quant * LloydMaxQuantizer(float* in, size_t input_size){
 }
 
 
-float * LloydMaxDequantizer(struct lloyd_max_quant * in, size_t input_size){
-	
+float * LloydMaxDequantizer(struct lloyd_max_quant * in, size_t input_size){	
 	float* out = malloc(input_size*sizeof(float));
   
-  #pragma omp parallel for default(none) shared(in, out, input_size)
+  #pragma omp parallel for
 	for(int i = 0; i < input_size; i++){
-		int cluster_index = (int) in->vec[i].number;
+		int cluster_index = (int) in->vec[i];
 
 		if (cluster_index>=0 && cluster_index < REPR_RANGE) out[i] = in->codebook[cluster_index];
 		else printf("ERROR: invalid cluster index %d at position %d\n", cluster_index, i);
@@ -119,19 +118,4 @@ float * LloydMaxDequantizer(struct lloyd_max_quant * in, size_t input_size){
 
 	return out;
 }
-// just like normal Dequantizer but also directly receives in input the 
-// quantized vector rather then accessing the struct's field
-float * LloydMaxDequantizer2(struct lloyd_max_quant * in, size_t input_size, u_int8_t * quantized){
-	
-	float* out = malloc(input_size*sizeof(float));
-  
-  #pragma omp parallel for default(none) shared(in, out, input_size)
-	for(int i = 0; i < input_size; i++){
-		int cluster_index = (int) quantized[i];
 
-		if (cluster_index>=0 && cluster_index < REPR_RANGE) out[i] = in->codebook[cluster_index];
-		else printf("ERROR: invalid cluster index %d at position %d\n", cluster_index, i);
-	}
-
-	return out;
-}

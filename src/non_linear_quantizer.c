@@ -50,7 +50,6 @@ void ALawExpander (float* in, size_t input_size){
 	//some useful values to have stored (to not compute them every time)
 	float one_over_alpha = 1.0 / ALPHA;
 	float one_plus_ln_a = 1.0 + logf(ALPHA);
-	float ln_one_plus_alpha = logf(1.0 + ALPHA);
 	float condition = 1.0 / one_plus_ln_a;
   
   #pragma omp parallel for
@@ -86,27 +85,17 @@ void RangeRestorer(float* in, size_t input_size, float min, float max){
 }
 
 
-struct compressed* NormalizedSymmetricQuantization(float* in, size_t input_size){
-	struct compressed* out = (struct compressed*) malloc(input_size*sizeof(struct compressed));
+uint8_t* NormalizedSymmetricQuantization(float* in, size_t input_size){
+	uint8_t* out = (uint8_t*) malloc(input_size*sizeof(uint8_t));
 	
 	float this_range = (REPR_RANGE - 1) / 2;
 	for(int i = 0; i < input_size; i++)
-		out[i].number = (uint64_t) ((in[i] + 1) * this_range);
+		out[i] = (uint8_t) ((in[i] + 1) * this_range);
 	
 	return out;
 }
 
-float* NormalizedSymmetricDequantization(struct compressed* in, size_t input_size){
-	float* out = malloc(input_size*sizeof(float));
-	
-	float this_range = (REPR_RANGE - 1) / 2;
-	for(int i = 0; i < input_size; i++)
-		out[i] = ((float) in[i].number) / this_range - 1.0;
-
-	return out;
-}
-
-float* NormalizedSymmetricDequantization2(uint8_t * in, size_t input_size){
+float* NormalizedSymmetricDequantization(uint8_t* in, size_t input_size){
 	float* out = malloc(input_size*sizeof(float));
 	
 	float this_range = (REPR_RANGE - 1) / 2;
@@ -115,8 +104,6 @@ float* NormalizedSymmetricDequantization2(uint8_t * in, size_t input_size){
 
 	return out;
 }
-
-
 
 //A law needs to be expanded bc it's wrong: it assumes a different formula for values less than 1/alpha
 struct non_linear_quant* NonLinearQuantization(float* in, size_t input_size, int type){
@@ -151,26 +138,6 @@ struct non_linear_quant* NonLinearQuantization(float* in, size_t input_size, int
 
 float* NonLinearDequantization(struct non_linear_quant* in, size_t input_size){	
 	float* out = NormalizedSymmetricDequantization(in->vec, input_size);
-	
-  switch(in->type){
-		case 1:
-			MuLawExpander(out, input_size);
-			break;
-		case 2:
-			ALawExpander(out, input_size);
-			break;
-		default:
-			printf("\tERROR\t companding type not valid\n");
-			return NULL;
-	}
-
-	RangeRestorer(out, input_size, in->min, in->max);
-
-	return out;
-}
-
-float* NonLinearDequantization2(struct non_linear_quant* in, size_t input_size, uint8_t * quantized){	
-	float* out = NormalizedSymmetricDequantization2(quantized, input_size);
 	
   switch(in->type){
 		case 1:

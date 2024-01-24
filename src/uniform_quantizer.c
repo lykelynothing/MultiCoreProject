@@ -16,21 +16,21 @@
  * The quantization itself is done in parallel with OpenMP.	*/
 struct unif_quant* UniformRangedQuantization(float* in, size_t input_size){
 	//define the output struct and allocate the memory for the vector itself
-	struct unif_quant* out = (struct unif_quant *) malloc(sizeof(struct unif_quant));
-	out->vec = (struct compressed*) malloc(input_size*sizeof(struct compressed));
+	struct unif_quant* out = (struct unif_quant*) malloc(sizeof(struct unif_quant));
+	out->vec = (uint8_t*) malloc(input_size * sizeof(uint8_t));
 
-	//run through the vector and saves min and max value in the struct 
+	//run through the vector and saves min and max value i- WARNING `tree-sitter` executable not found (parser generator, only needed for :TSInstallFromGrammar, not required for :TSInstallen the struct 
 	MinMax(in, input_size, &(out->min), &(out->max));
 
 	//calculate the steps of the quantization
 	float range = out->max - out->min;
-	float min = out->min;			//cache optimization for parallel loop
-	float step = range / REPR_RANGE;
+	float min = out->min;
+  float step = range / REPR_RANGE;
 
-	#pragma omp parallel for default(none) shared(out, in, input_size, min, step)
+	#pragma omp parallel for
 	for(int i = 0; i < input_size; i++){
 		float quant = floor((in[i] - min) / step);
-		out->vec[i].number = (uint64_t) quant;
+		out->vec[i] = (uint8_t) quant;
 	}
 
 	return out;
@@ -53,26 +53,10 @@ float* UniformRangedDequantization(struct unif_quant* in, size_t input_size){
 	float range = max - min;
 	float step = range / REPR_RANGE;
 
-	#pragma omp parallel for default(none) shared(out, in, input_size, step, min)
+	#pragma omp parallel for
 	for(int i = 0; i < input_size; i++)
-		out[i] = ((float)in->vec[i].number) * step + min;
+		out[i] = ((float)in->vec[i]) * step + min;
 
 	return out;
 }
 
-float* UniformRangedDequantization2(struct unif_quant* in, size_t input_size, uint8_t * quantized){
-	//allocates memory for the dequantized vector
-	float* out = malloc(input_size*sizeof(float));
-	
-	//calculate dequantization steps
-	float max = in->max;
-	float min = in->min;
-	float range = max - min;
-	float step = range / REPR_RANGE;
-
-	#pragma omp parallel for default(none) shared(out, in, input_size, step, min)
-	for(int i = 0; i < input_size; i++)
-		out[i] = ((float) quantized[i]) * step + min;
-
-	return out;
-}
