@@ -50,6 +50,8 @@ int MPI_Allreduce(const void *sendbuf, void *recvbuf,
     MPI_Comm_size(MPI_COMM_WORLD, &comm_sz);
     
     if (strcmp(quant_env_var, "LLOYD") == 0) {
+        // when we work with algo we also have to 
+        // send the codebook
         algo = 0;
     } else if (strcmp(quant_env_var, "NON_LINEAR") == 0) {
         // also check for type of non_linear
@@ -118,11 +120,8 @@ int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, int algo, float * my
         if (my_rank < half) {
             int source = half + my_rank;
             // receive struct and quantized array
-            MPI_Recv(rcv_buf, dim, MPI_UINT8_T, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            MPI_Recv(struct_ptr, 1, MPI_STRUCT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            // once received dequantize it and do sum
-            // need to attach vector to struct
-
+            
+            
             DequantizeVector(struct_ptr, rcv_buf, dequantized, algo, dim);
             // probably need to free the vector allocated by the dequantizer
 
@@ -135,10 +134,6 @@ int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, int algo, float * my
             // first quantize
             struct_ptr = Quantize(partial_sum, dim , algo);
             // extract from struct quantized array to send seperately
-            FromStructToVec(algo, struct_ptr, quantized, dim);
-
-            MPI_Isend(quantized, dim, MPI_UINT8_T, dest, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            MPI_Isend(struct_ptr, 1, MPI_STRUCT, dest, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         }
         remaining = remaining / 2;
     }
@@ -229,39 +224,89 @@ void DequantizeVector(void * struct_ptr1, float * dequantized_1, uint8_t * quant
         dequantized_1 = UniformRangedDequantization2(str1, dim, quantized);
     }
 }
-/* Extracts from quantized_partial_sum_struct 
- * the quantized vector in the struct's vec field */
-void FromStructToVec(int algo, void *quantized_partial_sum_struct, uint8_t *quantized_partial_sum, int dim)
-{
-    int i;
-    int dim;
 
-    switch (algo)
-    {
-    case 0:
-        struct lloyd_max_quant *res = (struct lloyd_max_quant *)quantized_partial_sum_struct;
-        for (i = 0; i < dim; i++)
-            quantized_partial_sum[i] = res->vec[i];
-    case 1:
-        struct non_linear_quant *res = (struct non_linear_quant *)quantized_partial_sum_struct;
-        for (i = 0; i < dim; i++)
-            quantized_partial_sum[i] = res->vec[i];
-    case 2:
-        struct unif_quant *res = (struct unif_quant *)quantized_partial_sum_struct;
-        for (i = 0; i < dim; i++)
-            quantized_partial_sum[i] = res->vec[i];
+/* Calls mpi to receive struct and quantized vector. Handles
+ * all kinds of struct and attaches to vec field the received
+ * quantized vector (uint8) */
+// THE FUNCTION DOESN'T FREE THE MEMORY IT ALLOCATES,
+// REMEMBER TO DO SO OUTSIDE OF IT
+void * Receive(int algo, int dim, int source){
+    
+    void * void_ptr;
+    MPI_Datatype * type_ptr;
+
+    switch(algo){
+        // lloyd also contains codebook
+        case 0:
+            struct lloyd_max_quant * str_ptr = malloc(sizeof(struct lloyd_max_quant));
+            str_ptr->vec = malloc(sizeof(uint8_t) * dim);
+            str_ptr->codebook = malloc(sizeof(float) * REPR_RANGE);
+            void_ptr = str_ptr;
+            MPI_Datatype MPI_Lloyd = LloydMaxQuantType();
+            type_ptr = &MPI_Lloyd;
+            MPI_Recv(str_ptr, 1, MPI_Lloyd, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(str_ptr->vec, dim, MPI_UINT8_T, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(str_ptr->codebook, REPR_RANGE, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        case 1:
+            // first create struct
+            struct non_linear_quant * str_ptr = malloc(sizeof(struct non_linear_quant));
+            str_ptr->vec = malloc(sizeof(uint8_t) * dim);
+            void_ptr = str_ptr;
+            // then create custom mpi datatype
+            MPI_Datatype MPI_NonLin = NonLinearQuantType();
+            type_ptr = &MPI_NonLin;
+            MPI_Recv(str_ptr, 1, MPI_NonLin, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(str_ptr -> vec, dim, MPI_UINT8_T, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        
+        case 2:
+            struct unif_quant * str_ptr = malloc(sizeof(struct unif_quant));
+            str_ptr->vec = malloc(sizeof(uint8_t) * dim);
+            void_ptr = str_ptr;
+            MPI_Datatype MPI_Unif = UnifQuantType();
+            type_ptr = &MPI_Unif;
+            MPI_Recv(str_ptr, 1, MPI_Unif, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(str_ptr->vec, dim, MPI_UINT8_T, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
     }
+
+    MPI_Type_free(type_ptr);
+
+    return void_ptr;
 }
-/* Makes struct_ptr vec field point to received quantized array */
-void AttachStructToArray(int algo, uint8_t *quantized, void *struct_ptr)
-{
-    switch (algo)
-    {
-    case 0:
-        struct lloyd_max_quant *res = (struct lloyd_max_quant *) struct_ptr;
-    case 1:
-        struct non_linear_quant *res = (struct non_linear_quant *) struct_ptr;
-    case 2:
-        struct unif_quant *res = (struct unif_quant *) struct_ptr;
+/* Sends the struct and its vec field (and codebook with LLOYD) to dest.
+ * Remeber to deallocate space outside of function. */
+int Send(void * struct_ptr, int algo, int dim, int dest){
+
+    int res;
+    MPI_Datatype * type_ptr;
+
+    switch(algo){
+        // lloyd also contains codebook
+        case 0:
+            struct lloyd_max_quant * str_ptr = (struct lloyd_max_quant *) struct_ptr;
+            MPI_Datatype MPI_Lloyd = LloydMaxQuantType();
+            type_ptr = &MPI_Lloyd;
+            MPI_Send(str_ptr, 1, MPI_Lloyd, dest, 0, MPI_COMM_WORLD);
+            MPI_Send(str_ptr->vec, dim, MPI_UINT8_T, dest, 0, MPI_COMM_WORLD);
+            MPI_Send(str_ptr->codebook, REPR_RANGE, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+        case 1:
+            // first create struct
+            struct non_linear_quant * str_ptr = malloc(sizeof(struct non_linear_quant));
+            // then create custom mpi datatype
+            MPI_Datatype MPI_NonLin = NonLinearQuantType();
+            type_ptr = &MPI_NonLin;
+            MPI_Send(str_ptr, 1, MPI_NonLin, dest, 0, MPI_COMM_WORLD);
+            MPI_Send(str_ptr -> vec, dim, MPI_UINT8_T, dest, 0, MPI_COMM_WORLD);
+        
+        case 2:
+            struct unif_quant * str_ptr = (struct unif_quant *) struct_ptr;
+            MPI_Datatype MPI_Unif = UnifQuantType();
+            type_ptr = &MPI_Unif;
+            MPI_Send(str_ptr, 1, MPI_Unif, dest, 0, MPI_COMM_WORLD);
+            MPI_Send(str_ptr->vec, dim, MPI_UINT8_T, dest, 0, MPI_COMM_WORLD);
     }
+
+    MPI_Type_free(type_ptr);
+
+    return res;
 }

@@ -9,30 +9,30 @@ extern int BITS;
 extern int REPR_RANGE;
 
 struct unif_quant{
-	uint8_t* vec;
 	float min;
 	float max;
+	uint8_t* vec;
 };
 
 struct non_linear_quant{
-	uint8_t* vec;
 	float min;
 	float max;
 	int type;
+	uint8_t* vec;
 };
 
 struct lloyd_max_quant{
-	uint8_t* vec;
 	float min;
 	float max;
 	float* codebook;
+	uint8_t* vec;
 };
 
-MPI_Datatype UnifQuantType(int array_size);
+MPI_Datatype UnifQuantType();
 
-MPI_Datatype NonLinearQuantType(int array_size);
+MPI_Datatype NonLinearQuantType();
 
-MPI_Datatype LloydMaxQuantType(int array_size);
+MPI_Datatype LloydMaxQuantType();
 
 float* RandFloatGenerator(size_t lenght, float lowerbound, float upperbound);
 

@@ -11,12 +11,16 @@
 
 MPI_Datatype UnifQuantType(int array_size){
     MPI_Datatype MPI_Unif_quant;
-    MPI_Datatype types[3] = {MPI_UINT8_T, MPI_FLOAT, MPI_FLOAT};
+    MPI_Datatype types[3] = {MPI_FLOAT, MPI_FLOAT, MPI_UINT8_T};
     int block_lengths[3] = {array_size, 1, 1};  
     MPI_Aint offsets[3];
-    offsets[0] = offsetof(struct unif_quant, vec);
-    offsets[1] = offsetof(struct unif_quant, min);
-    offsets[2] = offsetof(struct unif_quant, max);
+
+	MPI_Get_address(&(((struct unif_quant *)0)->min), &offsets[0]);
+	MPI_Get_address(&(((struct unif_quant *)0)->max), &offsets[1]);
+	MPI_Get_address(&(((struct unif_quant *)0)->vec), &offsets[2]);
+
+	for (int i = 0; i < 3; i++)
+		offsets[i] -= offsets[0];
 
     MPI_Type_create_struct(3, block_lengths, offsets, types, &MPI_Unif_quant);
     MPI_Type_commit(&MPI_Unif_quant);
@@ -27,13 +31,17 @@ MPI_Datatype UnifQuantType(int array_size){
 
 MPI_Datatype NonLinearQuantType(int array_size){
     MPI_Datatype MPI_Non_linear_quant;
-    MPI_Datatype types[4] = {MPI_UINT8_T, MPI_FLOAT, MPI_FLOAT, MPI_INT};
+    MPI_Datatype types[4] = {MPI_FLOAT, MPI_FLOAT, MPI_INT, MPI_UINT8_T};
     int block_lengths[4] = {array_size, 1, 1, 1}; 
     MPI_Aint offsets[4];
-    offsets[0] = offsetof(struct non_linear_quant, vec);
-    offsets[1] = offsetof(struct non_linear_quant, min);
-    offsets[2] = offsetof(struct non_linear_quant, max);
-    offsets[3] = offsetof(struct non_linear_quant, type);
+    
+	MPI_Get_address(&(((struct non_linear_quant *)0)->min), &offsets[0]);
+	MPI_Get_address(&(((struct non_linear_quant *)0)->max), &offsets[1]);
+	MPI_Get_address(&(((struct non_linear_quant *)0)->type), &offsets[2]);
+	MPI_Get_address(&(((struct non_linear_quant *)0)->vec), &offsets[3]);
+
+	for (int i = 0; i < 4; i++)
+		offsets[i] -= offsets[0];
 
     MPI_Type_create_struct(4, block_lengths, offsets, types, &MPI_Non_linear_quant);
     MPI_Type_commit(&MPI_Non_linear_quant);
@@ -42,15 +50,19 @@ MPI_Datatype NonLinearQuantType(int array_size){
 }
 
 
-MPI_Datatype LloydMaxQuantType(int array_size){
+MPI_Datatype LloydMaxQuantType(){
     MPI_Datatype MPI_Lloyd_max_quant;
-    MPI_Datatype types[4] = {MPI_UINT8_T, MPI_FLOAT, MPI_FLOAT, MPI_FLOAT};
-    int block_lengths[4] = {array_size, 1, 1, REPR_RANGE};
+    MPI_Datatype types[4] = {MPI_FLOAT, MPI_FLOAT, MPI_FLOAT, MPI_UINT8_T};
+    int block_lengths[4] = {1, 1, 1, REPR_RANGE};
     MPI_Aint offsets[4];
-    offsets[0] = offsetof(struct lloyd_max_quant, vec);
-    offsets[1] = offsetof(struct lloyd_max_quant, min);
-    offsets[2] = offsetof(struct lloyd_max_quant, max);
-    offsets[3] = offsetof(struct lloyd_max_quant, codebook);
+
+	MPI_Get_address(&(((struct lloyd_max_quant *)0)-> min), &offsets[0]);
+	MPI_Get_address(&(((struct lloyd_max_quant *)0)-> max), &offsets[1]);
+	MPI_Get_address(&(((struct lloyd_max_quant *)0)-> codebook), &offsets[2]);
+	MPI_Get_address(&(((struct lloyd_max_quant *)0)-> vec), &offsets[3]);
+
+	for (int i = 0; i < 4; i++)
+		offsets[i] -= offsets[0];
 
     MPI_Type_create_struct(4, block_lengths, offsets, types, &MPI_Lloyd_max_quant);
     MPI_Type_commit(&MPI_Lloyd_max_quant);
