@@ -7,8 +7,10 @@
 #include "non_linear_quantizer.h"
 #include "uniform_quantizer.h"
 #include "tools.h"
-#include "collectives.h"
+//#include "collectives.h"
 
+int BITS = 8;
+int REPR_RANGE = 1 << 8;
 
 int main(int argc, char** argv){
 	srand(time(NULL));
@@ -18,7 +20,8 @@ int main(int argc, char** argv){
 
 	bits_env_var = getenv("BITS_VAR");
 	if (bits_env_var != NULL){
-		BITS = bits_env_var;
+		int bits_env_int = atoi(bits_env_var);
+		BITS = bits_env_int;
 		REPR_RANGE = (1 << BITS);
 	} else {
 		printf("\n Error : No environmental variable BITS_VAR found\n");

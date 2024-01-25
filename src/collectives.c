@@ -107,8 +107,6 @@ int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, int algo, float * my
     int half;
     // used to store quantized received bits
     void * struct_ptr;
-    // used to store received quantized data
-    void * rcv_buf;
 
     float * dequantized;
     uint8_t * quantized;
@@ -120,9 +118,13 @@ int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, int algo, float * my
         if (my_rank < half) {
             int source = half + my_rank;
             // receive struct and quantized array
+            // TODO make the receive function also
+            // give give reference to vec field
+            struct_ptr = Receive(algo, dim, source);
+
             
             
-            DequantizeVector(struct_ptr, rcv_buf, dequantized, algo, dim);
+            DequantizeVector(struct_ptr, quantized, dequantized, algo, dim);
             // probably need to free the vector allocated by the dequantizer
 
             // sum my array with received dequantized one
@@ -141,7 +143,6 @@ int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, int algo, float * my
     free(quantized);
     free(dequantized);
     free(struct_ptr);
-    free(rcv_buf);
 }
 
 /* Function takes float vector and quantizes it according to
