@@ -1,11 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 #include <mpi.h>
 
 #include "tools.h"
 #include "uniform_quantizer.h"
-#include "collectives.h"
 
 void ScatterUniform(struct unif_quant* in, size_t size, MPI_Comm comm, uint8_t** output_ptr){
   int rank, comm_sz;
@@ -14,11 +14,10 @@ void ScatterUniform(struct unif_quant* in, size_t size, MPI_Comm comm, uint8_t**
   
   int remainder = size % comm_sz;
   int div = size / comm_sz;
-  const size_t my_segment_sz = (rank < remainder) ? div + 1 : div;
 
   size_t* segment_sizes = (size_t*) malloc(comm_sz * sizeof(size_t));
   for (int i = 0; i < comm_sz; i++)
-    segment_sizes[i] = (i < remainder) ? div + 1 : div;
+    segment_sizes[i] = (i < remainder) ? (size_t) div + 1 : (size_t) div;
 
   size_t* segment_ends = (size_t*) malloc(comm_sz * sizeof(size_t));
   segment_ends[0] = segment_sizes[0];
@@ -36,15 +35,16 @@ void ScatterUniform(struct unif_quant* in, size_t size, MPI_Comm comm, uint8_t**
   int recv_from = (rank - 1 + comm_sz) % comm_sz;
   
   MPI_Status recv_status;
-  MPI_Request recv_request;
+  MPI_Request recv_req;
+  MPI_Datatype MPI_Unif = UnifQuantType();
 
   for (int i = 0; i < comm_sz; i++){
     int recv_chunk = (rank - i - 1 + comm_sz) % comm_sz;
     int send_chunk = (rank - i + comm_sz) % comm_sz;
-    struct compressed * segment_sent = &(output[segment_ends[send_chunk] - segment_sizes[send_chunk]]);
-
-    MPI_Irecv(recv_buffer, segment_sizes[recv_chunk], MPI_Byte, recv_from, 0, comm, &recv_request);
-    MPI_Send(segment_sent, segment_sizes[send_chunk], MPI_Byte, send_to, 0, comm);
+    uint8_t* segment_sent = &(output[segment_ends[send_chunk] - segment_sizes[send_chunk]]);
+    
+    MPI_Irecv(buffer, segment_sizes[recv_chunk], MPI_UINT8_T, recv_from, 0, comm, &recv_req);
+    MPI_Send(segment_sent, segment_sizes[send_chunk], MPI_UINT8_T, send_to, 0, comm);
 
     uint8_t *segment_update = &(output[segment_ends[recv_chunk] - segment_sizes[recv_chunk]]);
 
@@ -52,10 +52,24 @@ void ScatterUniform(struct unif_quant* in, size_t size, MPI_Comm comm, uint8_t**
 
     //dequantize
 
-    for(size_t i = 0; i < segment_sizes[recv_chunk]; i++){
-      segment_update[i] += buffer[i];
-    }
-  } 
+    //for(size_t i = 0; i < segment_sizes[recv_chunk]; i++){
+    //  segment_update[i] += buffer[i];
+    //}
+  }
+
+  /*for (size_t i = 0; i < size_t(size - 1); ++i) {
+    int send_chunk = (rank - i + 1 + comm_sz) % comm_sz;
+    int recv_chunk = (rank - i + comm_sz) % comm_sz;
+    // Segment to send - at every iteration we send segment (r+1-i)
+    float* segment_send = &(output[segment_ends[send_chunk] - segment_sizes[send_chunk]]);
+
+    // Segment to recv - at every iteration we receive segment (r-i)
+    float* segment_recv = &(output[segment_ends[recv_chunk] - segment_sizes[recv_chunk]]);
+    MPI_Sendrecv(segment_send, segment_sizes[send_chunk], datatype, send_to, 0, segment_recv, segment_sizes[recv_chunk], datatype, recv_from, 0, MPI_COMM_WORLD, &recv_status);
+  }*/
+
+  MPI_Type_free(&MPI_Unif);
+  free(buffer);
 }
 
 /*int MPI_Allreduce_ring(const void *sendbuf, void *recvbuf, int count,
