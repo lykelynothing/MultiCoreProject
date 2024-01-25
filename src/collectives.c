@@ -5,6 +5,7 @@
 #include <string.h>
 #include <time.h>
 
+#include "collectives.h"
 #include "tools.h"
 #include "lloyd_max_quantizer.h"
 #include "non_linear_quantizer.h"
@@ -154,11 +155,11 @@ void * Quantize(float * sendbuf, int count, int algo){
 
     uint8_t *results = malloc(sizeof(uint8_t) * count);
 
-    if (algo = 0)
+    if (algo == 0)
     {
         struct_ptr = LloydMaxQuantizer(sendbuf, count);
     }
-    else if (algo = 1)
+    else if (algo == 1)
     {
         char *string_type_env = getenv("NON_LINEAR_TYPE");
         int type;
@@ -174,7 +175,7 @@ void * Quantize(float * sendbuf, int count, int algo){
         struct_ptr = NonLinearQuantization(sendbuf, count, type);
     }
 
-    else if (algo = 2)
+    else if (algo == 2)
         struct_ptr = UniformRangedQuantization(sendbuf, count);
 
     else 
@@ -184,6 +185,7 @@ void * Quantize(float * sendbuf, int count, int algo){
 }
 
 /* Same as Dequantize vector but for 2 vectors */
+/*
 void DequantizeTwoVectors(void * struct_ptr1, void * struct_ptr2, float * dequantized_1, 
                             float * dequantized_2, int algo, int dim) {
     switch (algo)
@@ -204,7 +206,7 @@ void DequantizeTwoVectors(void * struct_ptr1, void * struct_ptr2, float * dequan
         dequantized_1 = UniformRangedDequantization(str1, dim);
         dequantized_2 = UniformRangedDequantization(str2, dim);
     }
-}
+}*/
 
 /* Writes into dequantized_1 the dequantized array present into 
  * struct_ptr1.vec */
@@ -217,12 +219,15 @@ void DequantizeVector(void * struct_ptr1, float * dequantized_1, uint8_t * quant
     case 0:
         struct lloyd_max_quant *str1 = (struct lloyd_max_quant *)struct_ptr1;
         dequantized_1 = LloydMaxDequantizer2(str1, dim, quantized);
+        break;
     case 1:
-        struct non_linear_quant *str1 = (struct non_linear_quant *)struct_ptr1;
-        dequantized_1 = NonLinearDequantization2(str1, dim, quantized);
+        struct non_linear_quant *str2 = (struct non_linear_quant *)struct_ptr1;
+        dequantized_1 = NonLinearDequantization2(str2, dim, quantized);
+        break;
     case 2:
-        struct unif_quant *str1 = (struct unif_quant *)struct_ptr1;
-        dequantized_1 = UniformRangedDequantization2(str1, dim, quantized);
+        struct unif_quant *str3 = (struct unif_quant *)struct_ptr1;
+        dequantized_1 = UniformRangedDequantization2(str3, dim, quantized);
+        break;
     }
 }
 
@@ -239,34 +244,34 @@ void * Receive(int algo, int dim, int source){
     switch(algo){
         // lloyd also contains codebook
         case 0:
-            struct lloyd_max_quant * str_ptr = malloc(sizeof(struct lloyd_max_quant));
-            str_ptr->vec = malloc(sizeof(uint8_t) * dim);
-            str_ptr->codebook = malloc(sizeof(float) * REPR_RANGE);
-            void_ptr = str_ptr;
+            struct lloyd_max_quant * str_ptr1 = malloc(sizeof(struct lloyd_max_quant));
+            str_ptr1->vec = malloc(sizeof(uint8_t) * dim);
+            str_ptr1->codebook = malloc(sizeof(float) * REPR_RANGE);
+            void_ptr = str_ptr1;
             MPI_Datatype MPI_Lloyd = LloydMaxQuantType();
             type_ptr = &MPI_Lloyd;
-            MPI_Recv(str_ptr, 1, MPI_Lloyd, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            MPI_Recv(str_ptr->vec, dim, MPI_UINT8_T, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            MPI_Recv(str_ptr->codebook, REPR_RANGE, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(str_ptr1, 1, MPI_Lloyd, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(str_ptr1->vec, dim, MPI_UINT8_T, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(str_ptr1->codebook, REPR_RANGE, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         case 1:
             // first create struct
-            struct non_linear_quant * str_ptr = malloc(sizeof(struct non_linear_quant));
-            str_ptr->vec = malloc(sizeof(uint8_t) * dim);
-            void_ptr = str_ptr;
+            struct non_linear_quant * str_ptr2 = malloc(sizeof(struct non_linear_quant));
+            str_ptr2->vec = malloc(sizeof(uint8_t) * dim);
+            void_ptr = str_ptr2;
             // then create custom mpi datatype
             MPI_Datatype MPI_NonLin = NonLinearQuantType();
             type_ptr = &MPI_NonLin;
-            MPI_Recv(str_ptr, 1, MPI_NonLin, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            MPI_Recv(str_ptr -> vec, dim, MPI_UINT8_T, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(str_ptr2, 1, MPI_NonLin, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(str_ptr2 -> vec, dim, MPI_UINT8_T, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         
         case 2:
-            struct unif_quant * str_ptr = malloc(sizeof(struct unif_quant));
-            str_ptr->vec = malloc(sizeof(uint8_t) * dim);
-            void_ptr = str_ptr;
+            struct unif_quant * str_ptr3 = malloc(sizeof(struct unif_quant));
+            str_ptr3->vec = malloc(sizeof(uint8_t) * dim);
+            void_ptr = str_ptr3;
             MPI_Datatype MPI_Unif = UnifQuantType();
             type_ptr = &MPI_Unif;
-            MPI_Recv(str_ptr, 1, MPI_Unif, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            MPI_Recv(str_ptr->vec, dim, MPI_UINT8_T, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(str_ptr3, 1, MPI_Unif, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(str_ptr3->vec, dim, MPI_UINT8_T, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
     }
 
@@ -284,27 +289,27 @@ int Send(void * struct_ptr, int algo, int dim, int dest){
     switch(algo){
         // lloyd also contains codebook
         case 0:
-            struct lloyd_max_quant * str_ptr = (struct lloyd_max_quant *) struct_ptr;
+            struct lloyd_max_quant * str_ptr1 = (struct lloyd_max_quant *) struct_ptr;
             MPI_Datatype MPI_Lloyd = LloydMaxQuantType();
             type_ptr = &MPI_Lloyd;
-            MPI_Send(str_ptr, 1, MPI_Lloyd, dest, 0, MPI_COMM_WORLD);
-            MPI_Send(str_ptr->vec, dim, MPI_UINT8_T, dest, 0, MPI_COMM_WORLD);
-            MPI_Send(str_ptr->codebook, REPR_RANGE, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+            MPI_Send(str_ptr1, 1, MPI_Lloyd, dest, 0, MPI_COMM_WORLD);
+            MPI_Send(str_ptr1->vec, dim, MPI_UINT8_T, dest, 0, MPI_COMM_WORLD);
+            MPI_Send(str_ptr1->codebook, REPR_RANGE, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
         case 1:
             // first create struct
-            struct non_linear_quant * str_ptr = malloc(sizeof(struct non_linear_quant));
+            struct non_linear_quant * str_ptr2 = malloc(sizeof(struct non_linear_quant));
             // then create custom mpi datatype
             MPI_Datatype MPI_NonLin = NonLinearQuantType();
             type_ptr = &MPI_NonLin;
-            MPI_Send(str_ptr, 1, MPI_NonLin, dest, 0, MPI_COMM_WORLD);
-            MPI_Send(str_ptr -> vec, dim, MPI_UINT8_T, dest, 0, MPI_COMM_WORLD);
+            MPI_Send(str_ptr2, 1, MPI_NonLin, dest, 0, MPI_COMM_WORLD);
+            MPI_Send(str_ptr2 -> vec, dim, MPI_UINT8_T, dest, 0, MPI_COMM_WORLD);
         
         case 2:
-            struct unif_quant * str_ptr = (struct unif_quant *) struct_ptr;
+            struct unif_quant * str_ptr3 = (struct unif_quant *) struct_ptr;
             MPI_Datatype MPI_Unif = UnifQuantType();
             type_ptr = &MPI_Unif;
-            MPI_Send(str_ptr, 1, MPI_Unif, dest, 0, MPI_COMM_WORLD);
-            MPI_Send(str_ptr->vec, dim, MPI_UINT8_T, dest, 0, MPI_COMM_WORLD);
+            MPI_Send(str_ptr3, 1, MPI_Unif, dest, 0, MPI_COMM_WORLD);
+            MPI_Send(str_ptr3->vec, dim, MPI_UINT8_T, dest, 0, MPI_COMM_WORLD);
     }
 
     MPI_Type_free(type_ptr);
