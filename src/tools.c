@@ -9,10 +9,10 @@
 #include "tools.h"
 
 
-MPI_Datatype UnifQuantType(int array_size){
+MPI_Datatype UnifQuantType(){
     MPI_Datatype MPI_Unif_quant;
     MPI_Datatype types[3] = {MPI_FLOAT, MPI_FLOAT, MPI_UINT8_T};
-    int block_lengths[3] = {array_size, 1, 1};  
+    int block_lengths[3] = {1, 1, 1};  
     MPI_Aint offsets[3];
 
 	MPI_Get_address(&(((struct unif_quant *)0)->min), &offsets[0]);
@@ -29,10 +29,10 @@ MPI_Datatype UnifQuantType(int array_size){
 }
 
 
-MPI_Datatype NonLinearQuantType(int array_size){
+MPI_Datatype NonLinearQuantType(){
     MPI_Datatype MPI_Non_linear_quant;
     MPI_Datatype types[4] = {MPI_FLOAT, MPI_FLOAT, MPI_INT, MPI_UINT8_T};
-    int block_lengths[4] = {array_size, 1, 1, 1}; 
+    int block_lengths[4] = {1, 1, 1, 1}; 
     MPI_Aint offsets[4];
     
 	MPI_Get_address(&(((struct non_linear_quant *)0)->min), &offsets[0]);

@@ -197,11 +197,16 @@ void DequantizeTwoVectors(void * struct_ptr1, void * struct_ptr2, float * dequan
         struct non_linear_quant *str2 = (struct non_linear_quant *)struct_ptr2;
         dequantized_1 = NonLinearDequantization(str1, dim);
         dequantized_2 = NonLinearDequantization(str2, dim);
+        break;
     case 2:
         struct unif_quant *str1 = (struct unif_quant *)struct_ptr1;
         struct unif_quant *str2 = (struct unif_quant *)struct_ptr2;
         dequantized_1 = UniformRangedDequantization(str1, dim);
         dequantized_2 = UniformRangedDequantization(str2, dim);
+        break;
+    default:
+        printf("ERROR!! Quant algorithm not valid!!\n");
+        break;
     }
 }
 
@@ -216,12 +221,18 @@ void DequantizeVector(void * struct_ptr1, float * dequantized_1, uint8_t * quant
     case 0:
         struct lloyd_max_quant *str1 = (struct lloyd_max_quant *)struct_ptr1;
         dequantized_1 = LloydMaxDequantizer2(str1, dim, quantized);
+        break;
     case 1:
         struct non_linear_quant *str1 = (struct non_linear_quant *)struct_ptr1;
         dequantized_1 = NonLinearDequantization2(str1, dim, quantized);
+        break;
     case 2:
         struct unif_quant *str1 = (struct unif_quant *)struct_ptr1;
         dequantized_1 = UniformRangedDequantization2(str1, dim, quantized);
+        break;
+    default:
+        printf("ERROR!! Quant algorith not valid\n");
+        break;
     }
 }
 
@@ -231,7 +242,6 @@ void DequantizeVector(void * struct_ptr1, float * dequantized_1, uint8_t * quant
 // THE FUNCTION DOESN'T FREE THE MEMORY IT ALLOCATES,
 // REMEMBER TO DO SO OUTSIDE OF IT
 void * Receive(int algo, int dim, int source){
-    
     void * void_ptr;
     MPI_Datatype * type_ptr;
 
@@ -247,6 +257,7 @@ void * Receive(int algo, int dim, int source){
             MPI_Recv(str_ptr, 1, MPI_Lloyd, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             MPI_Recv(str_ptr->vec, dim, MPI_UINT8_T, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             MPI_Recv(str_ptr->codebook, REPR_RANGE, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            break;
         case 1:
             // first create struct
             struct non_linear_quant * str_ptr = malloc(sizeof(struct non_linear_quant));
@@ -257,7 +268,7 @@ void * Receive(int algo, int dim, int source){
             type_ptr = &MPI_NonLin;
             MPI_Recv(str_ptr, 1, MPI_NonLin, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             MPI_Recv(str_ptr -> vec, dim, MPI_UINT8_T, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        
+            break;
         case 2:
             struct unif_quant * str_ptr = malloc(sizeof(struct unif_quant));
             str_ptr->vec = malloc(sizeof(uint8_t) * dim);
@@ -266,17 +277,20 @@ void * Receive(int algo, int dim, int source){
             type_ptr = &MPI_Unif;
             MPI_Recv(str_ptr, 1, MPI_Unif, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             MPI_Recv(str_ptr->vec, dim, MPI_UINT8_T, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
+            break;
+        default:
+            printf("ERROR!! Quant algorithm not valid\n");
+            return NULL;
     }
 
     MPI_Type_free(type_ptr);
 
     return void_ptr;
 }
+
 /* Sends the struct and its vec field (and codebook with LLOYD) to dest.
  * Remeber to deallocate space outside of function. */
 int Send(void * struct_ptr, int algo, int dim, int dest){
-
     int res;
     MPI_Datatype * type_ptr;
 
@@ -288,7 +302,8 @@ int Send(void * struct_ptr, int algo, int dim, int dest){
             type_ptr = &MPI_Lloyd;
             MPI_Send(str_ptr, 1, MPI_Lloyd, dest, 0, MPI_COMM_WORLD);
             MPI_Send(str_ptr->vec, dim, MPI_UINT8_T, dest, 0, MPI_COMM_WORLD);
-            MPI_Send(str_ptr->codebook, REPR_RANGE, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+            MPI_Send(str_ptr->codebook, REPR_RANGE, M0PI_FLOAT, dest, 0, MPI_COMM_WORLD);
+            break;
         case 1:
             // first create struct
             struct non_linear_quant * str_ptr = malloc(sizeof(struct non_linear_quant));
@@ -297,16 +312,21 @@ int Send(void * struct_ptr, int algo, int dim, int dest){
             type_ptr = &MPI_NonLin;
             MPI_Send(str_ptr, 1, MPI_NonLin, dest, 0, MPI_COMM_WORLD);
             MPI_Send(str_ptr -> vec, dim, MPI_UINT8_T, dest, 0, MPI_COMM_WORLD);
-        
+            break;
         case 2:
             struct unif_quant * str_ptr = (struct unif_quant *) struct_ptr;
             MPI_Datatype MPI_Unif = UnifQuantType();
             type_ptr = &MPI_Unif;
             MPI_Send(str_ptr, 1, MPI_Unif, dest, 0, MPI_COMM_WORLD);
             MPI_Send(str_ptr->vec, dim, MPI_UINT8_T, dest, 0, MPI_COMM_WORLD);
+            break;
+        default:
+            printf("ERROR!! Quant algorithm not valid!!\n");
+            break;
     }
 
     MPI_Type_free(type_ptr);
 
     return res;
 }
+
