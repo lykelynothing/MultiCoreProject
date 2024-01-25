@@ -9,10 +9,22 @@
 #include "tools.h"
 #include "collectives.h"
 
+
 int main(int argc, char** argv){
 	srand(time(NULL));
 	size_t dim;
 	int my_rank, comm_sz;
+    char * bits_env_var;
+
+	bits_env_var = getenv("BITS_VAR");
+	if (bits_env_var != NULL){
+		BITS = bits_env_var;
+		REPR_RANGE = (1 << BITS);
+	} else {
+		printf("\n Error : No environmental variable BITS_VAR found\n");
+		return;
+	}
+
 
 	switch(argc){
 		case 2:
@@ -30,9 +42,7 @@ int main(int argc, char** argv){
 
 	float * in = RandFloatGenerator(dim, -1000.0, 1000.0);
 
-	// god please make this work
-	uint8_t * out = malloc(sizeof(struct compressed) * dim);
-	// inshallah
+	uint8_t * out = malloc(sizeof(uint8_t) * dim);
 	// TODO dequantize out and check if it's right
 	MPI_Allreduce((void *) in, (void *) out, dim, MPI_UINT64_T, MPI_SUM, MPI_COMM_WORLD);
 	
