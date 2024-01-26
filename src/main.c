@@ -7,7 +7,7 @@
 #include "non_linear_quantizer.h"
 #include "uniform_quantizer.h"
 #include "tools.h"
-//#include "collectives.h"
+#include "collectives.h"
 
 int BITS = 8;
 int REPR_RANGE = 1 << 8;
@@ -43,8 +43,11 @@ int main(int argc, char** argv){
 	MPI_Comm_size(MPI_COMM_WORLD, &comm_sz);
 	MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
-	float * in = RandFloatGenerator(dim, -1000.0, 1000.0);
-
+	//float * in = RandFloatGenerator(dim, -1000.0, 1000.0);
+	dim = 100;
+	float * in = malloc(sizeof(float) * dim);
+	for (int i = 0; i < dim; i ++)
+		in[i] = 0;
 	uint8_t * out = malloc(sizeof(uint8_t) * dim);
 	// TODO dequantize out and check if it's right
 	MPI_Allreduce((void *) in, (void *) out, dim, MPI_UINT64_T, MPI_SUM, MPI_COMM_WORLD);

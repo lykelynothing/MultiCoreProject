@@ -35,10 +35,13 @@ int MPI_Allreduce(const void *sendbuf, void *recvbuf,
     char * quant_env_var;
     char * send_algo_var;
     char * non_linear_env;
-    
     quant_env_var = getenv("QUANT_ALGO");
     send_algo_var = getenv("SEND_ALGO");
 
+    if (send_algo_var == NULL){
+        printf("\nError : no send_algo_var found. export SEND_ALGO = 1 (ring) | 0 (recursive halving)\n");
+        return MPI_ERR_OTHER;
+    }
     // default will be recursive-halving
     if (strcmp(send_algo_var, "RING") == 0){
         send_algo = 1;
@@ -46,10 +49,14 @@ int MPI_Allreduce(const void *sendbuf, void *recvbuf,
         send_algo = 0;
     }
 
-
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
     MPI_Comm_size(MPI_COMM_WORLD, &comm_sz);
-    
+
+    if (quant_env_var == NULL){
+        printf("\nError : no quant_env_var found. export QUANT_ALGO=LLOYD|NON_LINEAR(NON_LINEAR_TYPE=1|0)|UNFIORM\n");
+        return MPI_ERR_OTHER;
+    }
+
     if (strcmp(quant_env_var, "LLOYD") == 0) {
         // when we work with algo we also have to 
         // send the codebook
@@ -66,10 +73,16 @@ int MPI_Allreduce(const void *sendbuf, void *recvbuf,
         }
     } else if (strcmp(quant_env_var, "UNIFORM") == 0) {
         algo = 2;
-    } else {
+    } else if (quant_env_var == NULL){
         // call normal MPI_Allreduce
         return PMPI_Allreduce(sendbuf, recvbuf, count, datatype, op, comm);
     }
+
+    if (send_algo == 0){
+        // need to add rcv buff that will store final sum
+        RecursiveHalvingSend(my_rank, comm_sz, count, algo, (float *) sendbuf);
+    }
+    /* else other send_algo */
     
     return MPI_SUCCESS;
 }
@@ -80,29 +93,6 @@ int MPI_Allreduce(const void *sendbuf, void *recvbuf,
  * For now assumes comm_sz is always divisible by 2. */
 // TODO Free stuff
 int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, int algo, float * my_numbers) { 
-    /*
-    // first dequantize
-    float * dequantized_1 = malloc(sizeof(float) * dim);
-    float * dequantized_2 = malloc(sizeof(float) * dim);
-    float * partial_sum = malloc(sizeof(float) * dim);
-    int i;
-
-    // dequantize two vectors
-    DequantizeTwoVectors(struct_ptr1, struct_ptr2, dequantized_1, dequantized_2, algo, dim);
-
-    // sum two dequantized vectors
-    for (i = 0; i < dim; i++)
-        partial_sum[i] = dequantized_1[i] + dequantized_2[i];
-    
-    // quantize partial sum vector
-    void * quantized_partial_sum_struct = Quantize(partial_sum, dim, algo);
-    uint8_t * quantized_partial_sum;
-    // used to extrapolate quantized vector from sum
-    FromStructToVec(algo, quantized_partial_sum_struct, quantized_partial_sum, dim);
-
-    free(dequantized_1);
-    free(dequantized_2);
-    free(partial_sum); */
 
     int remaining = comm_sz;
     int half;
@@ -115,35 +105,32 @@ int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, int algo, float * my
     // need to send struct as well
     while (remaining != 1) {
         half = remaining / 2;
-        
         if (my_rank < half) {
             int source = half + my_rank;
             // receive struct and quantized array
-            // TODO make the receive function also
-            // give give reference to vec field
             struct_ptr = Receive(algo, dim, source);
-
-            
-            
-            DequantizeVector(struct_ptr, quantized, dequantized, algo, dim);
+            DequantizeVector(struct_ptr, &dequantized, quantized, algo, dim);
             // probably need to free the vector allocated by the dequantizer
-
             // sum my array with received dequantized one
             for (int i = 0; i < dim; i++)
                 partial_sum[i] = partial_sum[i] + dequantized[i];
-        
         } else {
             int dest = my_rank % half;
             // first quantize
             struct_ptr = Quantize(partial_sum, dim , algo);
-            // extract from struct quantized array to send seperately
+            Send(struct_ptr, algo, dim, dest);
+            printf("???\n");
         }
         remaining = remaining / 2;
     }
-
-    free(quantized);
-    free(dequantized);
-    free(struct_ptr);
+    if (my_rank == 0){
+        for (int i = 0; i < dim; i++)
+            printf("out[%i]=%lf\n", i, partial_sum[i]);
+    }
+    //MPI_Barrier(MPI_COMM_WORLD);
+    //free(quantized);
+    //free(dequantized);
+    //free(struct_ptr);
 }
 
 /* Function takes float vector and quantizes it according to
@@ -208,25 +195,22 @@ void DequantizeTwoVectors(void * struct_ptr1, void * struct_ptr2, float * dequan
     }
 }*/
 
-/* Writes into dequantized_1 the dequantized array present into 
+/* Writes into dequantized_1 the quantized array present into 
  * struct_ptr1.vec */
-
-// TODO modify this so that it can dequantize by receiving the array of uints8 
-// directly and only use the right struct fields
-void DequantizeVector(void * struct_ptr1, float * dequantized_1, uint8_t * quantized, int algo, int dim){
+void DequantizeVector(void * struct_ptr1, float ** dequantized_1, uint8_t * quantized, int algo, int dim){
     switch (algo)
     {
     case 0:
         struct lloyd_max_quant *str1 = (struct lloyd_max_quant *)struct_ptr1;
-        dequantized_1 = LloydMaxDequantizer2(str1, dim, quantized);
+        *dequantized_1 = LloydMaxDequantizer(str1, dim);
         break;
     case 1:
         struct non_linear_quant *str2 = (struct non_linear_quant *)struct_ptr1;
-        dequantized_1 = NonLinearDequantization2(str2, dim, quantized);
+        *dequantized_1 = NonLinearDequantization(str2, dim);
         break;
     case 2:
         struct unif_quant *str3 = (struct unif_quant *)struct_ptr1;
-        dequantized_1 = UniformRangedDequantization2(str3, dim, quantized);
+        *dequantized_1 = UniformRangedDequantization(str3, dim);
         break;
     }
 }
@@ -253,6 +237,7 @@ void * Receive(int algo, int dim, int source){
             MPI_Recv(str_ptr1, 1, MPI_Lloyd, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             MPI_Recv(str_ptr1->vec, dim, MPI_UINT8_T, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             MPI_Recv(str_ptr1->codebook, REPR_RANGE, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            break;
         case 1:
             // first create struct
             struct non_linear_quant * str_ptr2 = malloc(sizeof(struct non_linear_quant));
@@ -263,7 +248,7 @@ void * Receive(int algo, int dim, int source){
             type_ptr = &MPI_NonLin;
             MPI_Recv(str_ptr2, 1, MPI_NonLin, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             MPI_Recv(str_ptr2 -> vec, dim, MPI_UINT8_T, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        
+            break; 
         case 2:
             struct unif_quant * str_ptr3 = malloc(sizeof(struct unif_quant));
             str_ptr3->vec = malloc(sizeof(uint8_t) * dim);
@@ -272,7 +257,7 @@ void * Receive(int algo, int dim, int source){
             type_ptr = &MPI_Unif;
             MPI_Recv(str_ptr3, 1, MPI_Unif, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             MPI_Recv(str_ptr3->vec, dim, MPI_UINT8_T, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
+            break;
     }
 
     MPI_Type_free(type_ptr);
