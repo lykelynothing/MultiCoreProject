@@ -9,7 +9,7 @@ int Send(void * struct_ptr, int algo, int dim, int dest);
 int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, int algo, float * my_numbers);
 void * Receive(int algo, int dim, int source);
 void * Quantize(float * sendbuf, int count, int algo);
-void DequantizeVector(void * struct_ptr1, float ** dequantized_1, uint8_t * quantized, int algo, int dim);
+void DequantizeVector(void * struct_ptr1, float ** dequantized_1, int algo, int dim);
 
 
 

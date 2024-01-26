@@ -129,7 +129,7 @@ void PrintFloatVec(float* vec, size_t lenght, char* prompt){
 //Prints a vector of int values, has the option of including a text
 void PrintInt8Vec(uint8_t* vec, size_t lenght, char* prompt){
 	printf("%s \n", prompt);
-	for (int i = 0; i < lenght; i++) printf("%llu \t", vec[i]);
+	for (int i = 0; i < lenght; i++) printf("%u \t", vec[i]);
 	printf("\n\n\n");
 }
 

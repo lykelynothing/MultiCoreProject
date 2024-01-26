@@ -25,7 +25,7 @@ int main(int argc, char** argv){
 		REPR_RANGE = (1 << BITS);
 	} else {
 		printf("\n Error : No environmental variable BITS_VAR found\n");
-		return;
+		return 0;
 	}
 
 
@@ -68,11 +68,11 @@ int main(int argc, char** argv){
 
 	float* dequantized = LloydMaxDequantizer(quantized, dim);
 
-/*	printf("Here's the results: \n INDEX \t ORIGINAL \t QUANT \t DEQUANT \n");
+	printf("Here's the results: \n INDEX \t ORIGINAL \t QUANT \t DEQUANT \n");
 	for(int i = 0; i < dim; i++)
 		printf("%d:\t %f \t %d \t %f \n", i, original[i], quantized->vec[i].number, dequantized[i]);
-	*/
-/*
+	
+
 	printf("MSE is: %f\n", MeanSquaredError(original, dequantized, dim));
 
 	free(original);

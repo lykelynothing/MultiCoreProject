@@ -26,15 +26,14 @@ int MPI_Allreduce(const void *sendbuf, void *recvbuf,
                   int count, MPI_Datatype datatype, MPI_Op op, MPI_Comm comm)
 {
     int my_rank, comm_sz;
-    clock_t start, end;
-    double cpu_time;
+    //clock_t start, end;
+    //double cpu_time;
     int algo;
-    int non_linear_type;
     int send_algo;
     
     char * quant_env_var;
     char * send_algo_var;
-    char * non_linear_env;
+
     quant_env_var = getenv("QUANT_ALGO");
     send_algo_var = getenv("SEND_ALGO");
 
@@ -64,13 +63,6 @@ int MPI_Allreduce(const void *sendbuf, void *recvbuf,
     } else if (strcmp(quant_env_var, "NON_LINEAR") == 0) {
         // also check for type of non_linear
         algo = 1;
-        non_linear_env = getenv("NON_LINEAR_TYPE");
-        if (non_linear_env != NULL){
-            non_linear_type = atoi(non_linear_env);
-        } else {
-            printf("\n Error: no environment variable for non linear type found \n");
-            return MPI_ERR_OTHER;
-        }
     } else if (strcmp(quant_env_var, "UNIFORM") == 0) {
         algo = 2;
     } else if (quant_env_var == NULL){
@@ -100,7 +92,6 @@ int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, int algo, float * my
     void * struct_ptr;
 
     float * dequantized;
-    uint8_t * quantized;
     float * partial_sum = my_numbers;
     // need to send struct as well
     while (remaining != 1) {
@@ -109,7 +100,7 @@ int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, int algo, float * my
             int source = half + my_rank;
             // receive struct and quantized array
             struct_ptr = Receive(algo, dim, source);
-            DequantizeVector(struct_ptr, &dequantized, quantized, algo, dim);
+            DequantizeVector(struct_ptr, &dequantized, algo, dim);
             // probably need to free the vector allocated by the dequantizer
             // sum my array with received dequantized one
             for (int i = 0; i < dim; i++)
@@ -127,6 +118,9 @@ int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, int algo, float * my
         for (int i = 0; i < dim; i++)
             printf("out[%i]=%lf\n", i, partial_sum[i]);
     }
+
+    return MPI_SUCCESS;
+
     //MPI_Barrier(MPI_COMM_WORLD);
     //free(quantized);
     //free(dequantized);
@@ -136,37 +130,31 @@ int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, int algo, float * my
 /* Function takes float vector and quantizes it according to
  * the kind of algorithm specified by int algo. Returns the 
  * struct containing the quantized vector */
-void * Quantize(float * sendbuf, int count, int algo){
-    
+void * Quantize(float * sendbuf, int count, int algo){ 
     void * struct_ptr;
 
-    uint8_t *results = malloc(sizeof(uint8_t) * count);
-
-    if (algo == 0)
-    {
-        struct_ptr = LloydMaxQuantizer(sendbuf, count);
-    }
-    else if (algo == 1)
-    {
-        char *string_type_env = getenv("NON_LINEAR_TYPE");
-        int type;
-
-        if (string_type_env != NULL)
-            type = atoi(string_type_env);
-        else
-        {
+    switch(algo){
+        case 0:
+            struct_ptr = LloydMaxQuantizer(sendbuf, count);
+            break;
+        case 1:
+            char *string_type_env = getenv("NON_LINEAR_TYPE");
+            int type;
+            if (string_type_env != NULL)
+                type = atoi(string_type_env);
+            else {
             printf("\nERROR : Couldn't find a type env_var, aborting...\n\n");
-            return;
-        }
-
-        struct_ptr = NonLinearQuantization(sendbuf, count, type);
+            return NULL;
+            }
+            struct_ptr = NonLinearQuantization(sendbuf, count, type);
+            break;
+        case 2:
+            struct_ptr = UniformRangedQuantization(sendbuf, count);
+            break;
+        default:
+            printf("ERROR!! Quant algo not valid\n");
+            return NULL;
     }
-
-    else if (algo == 2)
-        struct_ptr = UniformRangedQuantization(sendbuf, count);
-
-    else 
-        return;
     
     return struct_ptr;
 }
@@ -197,21 +185,23 @@ void DequantizeTwoVectors(void * struct_ptr1, void * struct_ptr2, float * dequan
 
 /* Writes into dequantized_1 the quantized array present into 
  * struct_ptr1.vec */
-void DequantizeVector(void * struct_ptr1, float ** dequantized_1, uint8_t * quantized, int algo, int dim){
-    switch (algo)
-    {
-    case 0:
-        struct lloyd_max_quant *str1 = (struct lloyd_max_quant *)struct_ptr1;
-        *dequantized_1 = LloydMaxDequantizer(str1, dim);
-        break;
-    case 1:
-        struct non_linear_quant *str2 = (struct non_linear_quant *)struct_ptr1;
-        *dequantized_1 = NonLinearDequantization(str2, dim);
-        break;
-    case 2:
-        struct unif_quant *str3 = (struct unif_quant *)struct_ptr1;
-        *dequantized_1 = UniformRangedDequantization(str3, dim);
-        break;
+void DequantizeVector(void * struct_ptr1, float ** dequantized_1, int algo, int dim){
+    switch (algo){
+        case 0:
+            struct lloyd_max_quant *str1 = (struct lloyd_max_quant *)struct_ptr1;
+            *dequantized_1 = LloydMaxDequantizer(str1, dim);
+            break;
+        case 1:
+            struct non_linear_quant *str2 = (struct non_linear_quant *)struct_ptr1;
+            *dequantized_1 = NonLinearDequantization(str2, dim);
+            break;
+        case 2:
+            struct unif_quant *str3 = (struct unif_quant *)struct_ptr1;
+            *dequantized_1 = UniformRangedDequantization(str3, dim);
+            break;
+        default:
+            printf("ERROR!! Quant algo not valid\n");
+            break;
     }
 }
 
@@ -237,6 +227,7 @@ void * Receive(int algo, int dim, int source){
             MPI_Recv(str_ptr1, 1, MPI_Lloyd, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             MPI_Recv(str_ptr1->vec, dim, MPI_UINT8_T, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             MPI_Recv(str_ptr1->codebook, REPR_RANGE, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Type_free(type_ptr);
             break;
         case 1:
             // first create struct
@@ -248,6 +239,7 @@ void * Receive(int algo, int dim, int source){
             type_ptr = &MPI_NonLin;
             MPI_Recv(str_ptr2, 1, MPI_NonLin, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             MPI_Recv(str_ptr2 -> vec, dim, MPI_UINT8_T, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Type_free(type_ptr);
             break; 
         case 2:
             struct unif_quant * str_ptr3 = malloc(sizeof(struct unif_quant));
@@ -257,18 +249,20 @@ void * Receive(int algo, int dim, int source){
             type_ptr = &MPI_Unif;
             MPI_Recv(str_ptr3, 1, MPI_Unif, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             MPI_Recv(str_ptr3->vec, dim, MPI_UINT8_T, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Type_free(type_ptr);
+            break;
+        default:
+            printf("ERROR!! Quant algo not valid\n");
             break;
     }
 
-    MPI_Type_free(type_ptr);
-
     return void_ptr;
 }
+
+
 /* Sends the struct and its vec field (and codebook with LLOYD) to dest.
  * Remeber to deallocate space outside of function. */
 int Send(void * struct_ptr, int algo, int dim, int dest){
-
-    int res;
     MPI_Datatype * type_ptr;
 
     switch(algo){
@@ -280,6 +274,8 @@ int Send(void * struct_ptr, int algo, int dim, int dest){
             MPI_Send(str_ptr1, 1, MPI_Lloyd, dest, 0, MPI_COMM_WORLD);
             MPI_Send(str_ptr1->vec, dim, MPI_UINT8_T, dest, 0, MPI_COMM_WORLD);
             MPI_Send(str_ptr1->codebook, REPR_RANGE, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+            MPI_Type_free(type_ptr);
+            break;
         case 1:
             // first create struct
             struct non_linear_quant * str_ptr2 = malloc(sizeof(struct non_linear_quant));
@@ -288,16 +284,21 @@ int Send(void * struct_ptr, int algo, int dim, int dest){
             type_ptr = &MPI_NonLin;
             MPI_Send(str_ptr2, 1, MPI_NonLin, dest, 0, MPI_COMM_WORLD);
             MPI_Send(str_ptr2 -> vec, dim, MPI_UINT8_T, dest, 0, MPI_COMM_WORLD);
-        
+            MPI_Type_free(type_ptr);
+            break;
         case 2:
             struct unif_quant * str_ptr3 = (struct unif_quant *) struct_ptr;
             MPI_Datatype MPI_Unif = UnifQuantType();
             type_ptr = &MPI_Unif;
             MPI_Send(str_ptr3, 1, MPI_Unif, dest, 0, MPI_COMM_WORLD);
             MPI_Send(str_ptr3->vec, dim, MPI_UINT8_T, dest, 0, MPI_COMM_WORLD);
+            MPI_Type_free(type_ptr);
+            break;
+        default:
+            printf("ERROR!! Quant algo not valid\n");
+            break;
     }
 
-    MPI_Type_free(type_ptr);
-
-    return res;
+    return MPI_SUCCESS;
 }
+
