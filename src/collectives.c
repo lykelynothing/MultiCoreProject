@@ -211,7 +211,6 @@ void DequantizeVector(void * struct_ptr1, float ** dequantized_1, int algo, int 
 // THE FUNCTION DOESN'T FREE THE MEMORY IT ALLOCATES,
 // REMEMBER TO DO SO OUTSIDE OF IT
 void * Receive(int algo, int dim, int source){
-    
     void * void_ptr;
     MPI_Datatype * type_ptr;
 
