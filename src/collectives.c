@@ -74,6 +74,9 @@ int MPI_Allreduce(const void *sendbuf, void *recvbuf,
         // need to add rcv buff that will store final sum
         RecursiveHalvingSend(my_rank, comm_sz, count, algo, (float *) sendbuf);
     }
+    else if (send_algo == 1){
+        RingAllreduce(my_rank, comm_sz, count, algo, (float *) sendbuf);
+    }
     /* else other send_algo */
     
     return MPI_SUCCESS;
@@ -83,7 +86,7 @@ int MPI_Allreduce(const void *sendbuf, void *recvbuf,
  * quantized data, dequantize it, sum it with its own vector, 
  * requantize the partial sum vector and send it to the next process.
  * For now assumes comm_sz is always divisible by 2. */
-// TODO Free stuff
+// TODO: Free stuff
 int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, int algo, float * my_numbers) { 
 
     int remaining = comm_sz;
@@ -127,7 +130,84 @@ int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, int algo, float * my
     //free(struct_ptr);
 }
 
+int RingAllreduce(int my_rank, int comm_sz, int dim, int algo, float* my_numbers, float* output_ptr){
+    //Homomorphic quantization of the data
+    void* struct_ptr = Quantize(my_numbers, dim, algo);
+    //The repo here gathers input lenghts given to each rank (dim) and check if they are equal
+    //using a normal MPI_Allgather. Wont do that, it seems an errorhandling practice   not useful for us 
+    
+    //The array will be divided into  N equal-sized chunks. Each process will have a vector of chunk_sizes
+    size_t size = dim / comm_sz;
+    size_t remainder = dim % comm_sz;
+    size_t* sizes = malloc(comm_sz * sizeof(size_t));
+    for (int i = 0; i < comm_sz; i++)
+        segment_sizes[i] = (i < remainder) ? size + 1 : size;
+    
+    size_t* segment_ends[comm_sz];
+    segment_ends[0] = segment_sizes[0];
+    for (int i = 1; i < comm_sz; i++)
+        segment_ends[i] = segment_sizes[i] + segment_ends[i-1];
+
+    //output buffer 
+    //(the pointer to the pointer will be used for MPI reasons)
+    //TODO: free it maybe, idk
+    float* output = malloc(dim * sizeof(uint8_t));
+    *output_ptr = output;
+    
+    //copy data from original data to output buffer
+    memcpy((void*) output, (void*) struct_ptr->vec, dim * sizeof(uint8_t));
+    
+    //temporary buffer for incoming data
+    uint8_t* buffer = (uint8_t*) malloc(segment_sizes[0]*sizeof(uint8_t));
+    
+    const size_t recv_from = (my_rank - 1 + comm_sz) % comm_sz;
+    const size_t send_to = (my_rank + 1) % comm_sz;
+    
+    //TODO: send here the pointers to the struct + quantization metadata (not the case for LM) .
+    //Need a recieve, but don't get if I can use the same struct ptr just used. Gonna ask Luca
+    
+    MPI_Status recv_status;
+    MPI_Request recv_req;
+
+    for (int i = 0; i < comm_sz; i++){
+        int recv_chunk = (rank - i - 1 + comm_sz) % comm_sz;
+        int send_chunk = (rank - i + comm_sz) % comm_sz;
+        //segment to send and recv
+        uint8_t* segment_send = &(output[segment_ends[send_chunk] - segment_sizes[send_chunk]]);
+
+        MPI_Irecv(buffer, segment_sizes[recv_chunk], MPI_UINT8_T, recv_from, 0, MPI_COMM_WORLD, &recv_req);
+        MPI_Send(segment_send, segment_sizes[send_chunk], MPI_UINT8_T, send_to, 0, MPI_COMM_WORLD);
+        
+        uint8_t* segment_update =  &(output[segment_ends[recv_chunk] - segment_sizes[recv_chunk]]);
+        
+        MPI_Wait(&recv_req, &recv_status);
+        
+        //TODO: this is for Homomorphic compression, (and still needs an overflow control) need to write also for non Homomorphic compression
+        for(size_t i = 0; i < segment_sizes[recv_chunk]; i++)
+            segment_update[i] += buffer[i];
+    }
+    
+    for (size_t i = 0; i < size_t (comm_sz - 1); ++i){
+        int recv_chunk = (rank - i - 1 + comm_sz) % comm_sz;
+        int send_chunk = (rank - i + comm_sz) % comm_sz;
+        //segment to send and recv
+        uint8_t* segment_send = &(output[segment_ends[send_chunk] - segment_sizes[send_chunk]]);
+        uint8_t* segment_recv = &(output[segment_ends[recv_chunk] - segment_sizes[recv_chunk]]);
+
+        MPI_Sendrecv(segment_send, segment_sizes[send_chunk], MPI_UINT8_T, send_to, 0, / 
+                    segment_recv, segment_sizes[recv_chunk], MPI_UINT8_T, recv_from, 0, / 
+                    MPI_COMM_WORLD, &recv_status);
+    }
+    
+    free(buffer);
+    
+    //TODO: Homomorphic Dequantization of the datas
+}
+
+
+
 /* Function takes float vector and quantizes it according to
+a
  * the kind of algorithm specified by int algo. Returns the 
  * struct containing the quantized vector */
 void * Quantize(float * sendbuf, int count, int algo){ 
