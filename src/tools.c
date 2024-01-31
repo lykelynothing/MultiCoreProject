@@ -114,6 +114,7 @@ void MinMax(float* vec, size_t lenght, float* min, float* max){
 		else if(vec[i] > maximum)	maximum = vec[i];
 	}
 	
+
 	*min = minimum;
 	*max = maximum;
 }
