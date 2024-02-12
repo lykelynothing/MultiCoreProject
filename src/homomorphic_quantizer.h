@@ -9,6 +9,6 @@
 
 struct unif_quant* HomomorphicQuantization(float* input, size_t input_size, MPI_Comm comm);
 
-float* HomomorphicDequantization(uint8_t* quantized, float min, float max, int comm_sz, size_t input_size);
+float* HomomorphicDequantization(uint8_t* quantized, float min, float max, int comm_sz, size_t input_size, int reduction_flag);
 
 #endif 

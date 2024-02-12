@@ -198,12 +198,9 @@ int RingAllreduce(int my_rank, int comm_sz, size_t dim, int algo, float* my_numb
   }
   
   //Thre output is stored into recvbuf
-  *recvbuf = HomomorphicDequantization(output, struct_ptr->min, struct_ptr->max, comm_sz, dim);
+  *recvbuf = HomomorphicDequantization(output, struct_ptr->min, struct_ptr->max, comm_sz, dim, 1);
   
   free(buffer);
-  free(output);
-  free(segment_sizes);
-  free(segment_ends);
 
   return MPI_SUCCESS;
 }

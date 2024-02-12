@@ -10,7 +10,6 @@
 #include "tools.h"
 #include "collectives.h"
 
-
 int main(int argc, char** argv){
   size_t dim;
 	switch(argc){
@@ -20,7 +19,8 @@ int main(int argc, char** argv){
 		default:
 			dim = 6;
 	}
-  
+  int var[2];
+  GetEnvVariables(var);
   int my_rank, comm_sz;
 	
   MPI_Init(NULL, NULL);
@@ -30,26 +30,38 @@ int main(int argc, char** argv){
 	MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
   
   srand(time(NULL) + my_rank);
-	float* in = RandFloatGenerator(dim, 0.0, 128.0);
-  float* out = malloc(dim * sizeof(float));
-  float* control = malloc(dim * sizeof(float));
-  
-  MPI_Allreduce(in, out, dim, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
-	PMPI_Allreduce(in, control, dim, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
-  
-  if(my_rank==0) printf("ORIGINAL VECTORS\n");
+	
+  float* in = RandFloatGenerator(dim, -500.0, 500.0);
+  if(my_rank==0) printf("\nORIGINAL VECTORS\n");
   MPI_Barrier(MPI_COMM_WORLD);
   ProcessPrinter(in, dim, my_rank, comm_sz, MPI_COMM_WORLD, FLOAT);
   
+  struct unif_quant* q = HomomorphicQuantization(in, dim, MPI_COMM_WORLD); 
+  if(my_rank==0) printf("\nQUANTIZED VECTORS\n");
+  MPI_Barrier(MPI_COMM_WORLD);
+  ProcessPrinter(q->vec, dim, my_rank, comm_sz, MPI_COMM_WORLD, UINT8);
+  
+  float* d = HomomorphicDequantization(q->vec, q->min, q->max, comm_sz, dim, 0);
+  if(my_rank==0) printf("\nDEQUANTIZED VECTOR\n");
+  MPI_Barrier(MPI_COMM_WORLD);
+  ProcessPrinter(d, dim, my_rank, comm_sz, MPI_COMM_WORLD, FLOAT);
+
+  float* out = malloc(dim * sizeof(float));
+  MPI_Allreduce(in, out, dim, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
   if(my_rank==0) printf("\nALLRED VECTOR\n");
   MPI_Barrier(MPI_COMM_WORLD);
   ProcessPrinter(out, dim, my_rank, comm_sz, MPI_COMM_WORLD, FLOAT);
   
-  if(my_rank==0) printf("\n CONTROL VECTOR\n");
+  float* control = malloc(dim * sizeof(float));
+	PMPI_Allreduce(in, control, dim, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
+  if(my_rank==0) printf("\nCONTROL VECTOR\n");
   MPI_Barrier(MPI_COMM_WORLD);
   ProcessPrinter(control, dim, my_rank, comm_sz, MPI_COMM_WORLD, FLOAT);
 
   free(in);
+  free(q->vec);
+  free(q);
+  free(d);
   free(out);
   free(control);
 

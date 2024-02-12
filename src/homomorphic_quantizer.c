@@ -12,9 +12,12 @@
  * To allow for sum of quantized values, we need to make the REPR_RANGE smaller. The this is done
  * by dividing the REPR_RANGE by pow=2^n such that >=comm_sz*/
 struct unif_quant* HomomorphicQuantization(float* input, size_t input_size, MPI_Comm comm){
+  int my_rank, comm_sz;
+  MPI_Comm_rank(comm, &my_rank);
+  MPI_Comm_size(comm, &comm_sz);
   struct unif_quant* out = (struct unif_quant*) malloc(sizeof(struct unif_quant));
   out -> vec = (uint8_t*) malloc(input_size * sizeof(uint8_t));
-  
+  printf("REPR_RANGE: %d\n", REPR_RANGE); 
   float min_max[2];
 
   MinMax(input, input_size, &min_max[0], &min_max[1], 1);
@@ -27,21 +30,16 @@ struct unif_quant* HomomorphicQuantization(float* input, size_t input_size, MPI_
   out -> max = min_max[1];
   
   //make the REPR_RANGE smaller to allow for reduction additions
-  int comm_sz;
-  MPI_Comm_size(comm, &comm_sz);
   int pow = 1;
   while (pow<comm_sz){
     pow <<= 1;
   }
-  float hom_repr_range = REPR_RANGE / pow;
-  
+
   //calculate the steps of the quantization
+  float hom_repr_range = REPR_RANGE / pow;
 	float range = out->max - out->min;
 	float min = out->min;
   float step = (hom_repr_range - 1) / range;
-
-  int my_rank;
-  MPI_Comm_rank(comm, &my_rank);
 
 	#pragma omp parallel for
 	for(int i = 0; i < input_size; i++){
@@ -55,7 +53,7 @@ struct unif_quant* HomomorphicQuantization(float* input, size_t input_size, MPI_
 /* For the dequantization step, the new minimum will be comm_sz*quantization_minimum
  * because this dequantization will be done on reduced data (hence each element will be the sum
  * of comm_sz quantized elements).*/
-float* HomomorphicDequantization(uint8_t* quantized, float min, float max, int comm_sz, size_t input_size){
+float* HomomorphicDequantization(uint8_t* quantized, float min, float max, int comm_sz, size_t input_size, int reduction_flag){
   //same custom REPR_RANGE used in quantization 
   int pow = 1;
   while (pow<comm_sz){
@@ -64,9 +62,11 @@ float* HomomorphicDequantization(uint8_t* quantized, float min, float max, int c
   float hom_repr_range = REPR_RANGE / pow;
   float range = max - min;
   float step = range / (hom_repr_range - 1);
-
-  //new min due to reduction 
-  float new_min = comm_sz * min;
+  
+  //new min due to reduction
+  float new_min;
+  if(reduction_flag == 1) new_min = comm_sz * min;
+  else new_min = min;
 
   float* out = malloc(input_size * sizeof(float));
   
