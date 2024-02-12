@@ -87,7 +87,7 @@ struct lloyd_max_quant * LloydMaxQuantizer(float* in, size_t input_size){
 	//define and allocate memory for struct and vector inside the struct
 	struct lloyd_max_quant * out = (struct lloyd_max_quant*) malloc(sizeof(struct lloyd_max_quant));
 	out->vec = (uint8_t*) malloc(input_size*sizeof(uint8_t)); 
-	MinMax(in, input_size, &(out->min), &(out->max));
+	MinMax(in, input_size, &(out->min), &(out->max), 0);
 
 	// Initialization 
 	out->codebook = RandFloatGenerator(REPR_RANGE, out->min, out->max);

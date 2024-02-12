@@ -8,6 +8,13 @@
 extern int BITS;
 extern int REPR_RANGE;
 
+typedef enum{
+  INT,
+  FLOAT,
+  UINT8,
+  UINT16,
+}TYPE;
+
 struct unif_quant{
 	float min;
 	float max;
@@ -36,11 +43,9 @@ MPI_Datatype LloydMaxQuantType();
 
 float* RandFloatGenerator(size_t lenght, float lowerbound, float upperbound);
 
-void MinMax(float* vec, size_t lenght, float* min, float* max);
+void GetEnvVariables(int* var);
 
-void PrintFloatVec(float* vec, size_t lenght, char* prompt);
-
-void PrintInt8Vec(uint8_t* vec, size_t lenght, char* prompt);
+void MinMax(float* vec, size_t lenght, float* min, float* max, int hom_flag);
 
 float sign(float x);
 
@@ -48,6 +53,6 @@ float MeanSquaredError(float* v1, float* v2, size_t lenght);
 
 float NormalizedMSE(float*v1, float* v2, size_t lenght);
 
-void Quicksort(float* input, size_t dim);
+void ProcessPrinter(void* obj, size_t lenght, int my_rank, int comm_sz, MPI_Comm comm, TYPE t);
 
 #endif

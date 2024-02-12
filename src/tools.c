@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 #include <omp.h>
 #include <time.h>
 #include <math.h>
@@ -8,12 +9,14 @@
 
 #include "tools.h"
 
+int BITS;
+int REPR_RANGE;
 
 MPI_Datatype UnifQuantType(){
-    MPI_Datatype MPI_Unif_quant;
-    MPI_Datatype types[3] = {MPI_FLOAT, MPI_FLOAT, MPI_UINT8_T};
-    int block_lengths[3] = {1, 1, 1};  
-    MPI_Aint offsets[3];
+  MPI_Datatype MPI_Unif_quant;
+  MPI_Datatype types[3] = {MPI_FLOAT, MPI_FLOAT, MPI_UINT8_T};
+  int block_lengths[3] = {1, 1, 1};  
+  MPI_Aint offsets[3];
 
 	MPI_Get_address(&(((struct unif_quant *)0)->min), &offsets[0]);
 	MPI_Get_address(&(((struct unif_quant *)0)->max), &offsets[1]);
@@ -71,6 +74,58 @@ MPI_Datatype LloydMaxQuantType(){
 }
 
 
+/* Function used to get environmental variables that will be used for the choice of 
+ * quantization algorithm, quantization precision (number of bits used) and type of 
+ * reduction. */
+void GetEnvVariables(int* var){
+  char * quant_env_var;
+  char * send_algo_var;
+  char * bits_env_var;
+	
+  bits_env_var = getenv("BITS_VAR");
+  quant_env_var = getenv("QUANT_ALGO");
+  send_algo_var = getenv("SEND_ALGO");
+  
+
+  if(strcmp(send_algo_var, "REC_HALVING") == 0)
+    var[1] = 0;
+  else if (strcmp(send_algo_var, "RING") == 0)
+    var[1] = 1;
+  else if (strcmp(send_algo_var, "NO_QUANT") == 0)
+    var[1] = -1;
+  else{
+    printf("\nERROR!! Invalid SEND_ALGO.\n export SEND_ALGO = 1 (ring) | 0 (recursive halving) | -1 (no quantization)\n");
+    return;
+  }
+
+  if (strcmp(quant_env_var, "LLOYD") == 0)
+    var[0] = 0;
+  else if (strcmp(quant_env_var, "NON_LINEAR") == 0)
+    var[0] = 1;
+  else if (strcmp(quant_env_var, "UNIFORM") == 0)
+    var[0] = 2;
+  else if (strcmp(quant_env_var, "HOMOMORPHIC") == 0)
+    var[0] = 3;
+  else{
+    printf("\nERROR!! Invalid QUANT_ALGO.\n export QUANT_ALGO=LLOYD|NON_LINEAR|UNFIORM\n");
+    return;
+  }
+  
+	if (bits_env_var != NULL){
+		int bits_env_int = atoi(bits_env_var);
+    if (bits_env_int != 8 && bits_env_int != 16){
+      printf("ERROR!! Insert a BITS_VAR value of 8 or 16 \n");
+      return;
+    }
+		BITS = bits_env_int;
+		REPR_RANGE = (1 << BITS);
+	} else {
+		printf("\nERROR!! Invalid BITS_VAR.\n export BITS_VAR=8|16\n");
+		return;
+	}
+}
+
+
 /* Generates a random vector of float parallelizing the work	*
  * on more threads and using rand_r (a thread safe version of	*
  * time.h rand that requires an explicit seed), an upperbound	*
@@ -102,37 +157,32 @@ float* RandFloatGenerator(size_t lenght, float lowerbound, float upperbound){
  * In the code it is often used with the uint8_vec struct to	*
  * store those value for the quantization interval setup and	*
  * for the dequantization itself.				*/
-void MinMax(float* vec, size_t lenght, float* min, float* max){
+void MinMax(float* vec, size_t lenght, float* min, float* max, int hom_flag){
 	
-	float minimum = vec[0];
-	float maximum = vec[0];
+	float minimum = INFINITY;
+	float maximum = -INFINITY;
 
-	#pragma omp parallel for default(none) shared(vec, lenght) \
-		reduction(min: minimum) reduction(max: maximum)
-	for(int i = 1; i < lenght; i++){
+	#pragma omp parallel for reduction(min: minimum) reduction(max: maximum)
+	for(int i = 0; i < lenght; i++){
 		if(vec[i] < minimum)		minimum = vec[i];
-		else if(vec[i] > maximum)	maximum = vec[i];
+		if(vec[i] > maximum)	maximum = vec[i];
 	}
 	
 
-	*min = minimum;
+  if (minimum == INFINITY || maximum == -INFINITY){
+    printf("ERROR!! minimum is: %f maximum is: %f\n", minimum, maximum);
+    return;
+  }
+
+  //if MinMax is used with QUANT_ALGO=HOMOMORPHIC
+  //a flag is set to register the minimum as -minimum
+  if (hom_flag == 1)
+	  *min = -minimum;
+  else 
+    *min = minimum;
 	*max = maximum;
 }
 
-
-//Prints a vector of float values, has the option of including a text
-void PrintFloatVec(float* vec, size_t lenght, char* prompt){
-	printf("%s \n", prompt);
-	for (int i = 0; i < lenght; i++) printf("%f \t", vec[i]);
-	printf("\n\n\n");
-}
-
-//Prints a vector of int values, has the option of including a text
-void PrintInt8Vec(uint8_t* vec, size_t lenght, char* prompt){
-	printf("%s \n", prompt);
-	for (int i = 0; i < lenght; i++) printf("%u \t", vec[i]);
-	printf("\n\n\n");
-}
 
 float sign(float x){
 	if (x >=0) return 1.0;
@@ -141,8 +191,9 @@ float sign(float x){
 
 //MeanSquaredError between two float arrays
 float MeanSquaredError(float* v1, float* v2, size_t lenght){
-	float out=0;
-//	#pragma omp parallel for default(none) shared(v1, v2, lenght) reduction(+:out)
+  float out=0;
+  
+  #pragma omp parallel for reduction(+:out)
 	for(int i = 0; i<lenght; i++)
 		out+= (v1[i]-v2[i])*(v1[i]-v2[i]);
 
@@ -154,85 +205,74 @@ float MeanSquaredError(float* v1, float* v2, size_t lenght){
 float NormalizedMSE(float*v1, float* v2, size_t lenght){
 	float out = MeanSquaredError(v1,v2, lenght);
 	float min, max, range;
-	MinMax(v1, lenght, &min, &max);
+	MinMax(v1, lenght, &min, &max, 0);
 	range = max - min;
 	out = out/range;
 	return out;
 }
 
-void swap(float *a, float *b) {
-    float temp = *a;
-    *a = *b;
-    *b = temp;
-}
 
-int partition(float arr[], int low, int high) {
-    float pivot = arr[high];
-    int i = low - 1;
-
-    for (int j = low; j < high; ++j) {
-        if (arr[j] < pivot) {
-            ++i;
-            swap(&arr[i], &arr[j]);
+void ProcessPrinter(void* obj, size_t lenght, int my_rank, int comm_sz, MPI_Comm comm, TYPE t){
+  switch(t){
+    case INT:
+      int* intptr = (int*) obj;
+      for(int rank = 0; rank < comm_sz; rank++){
+        if (my_rank == rank){
+          printf("my_rank = %d\n", my_rank);
+          for(int ind = 0; ind < lenght; ind++)
+            printf("INT[%d] = %d\t", ind, intptr[ind]);
+          printf("\n");
         }
-    }
+        if(comm_sz != 1)
+          MPI_Barrier(comm);
+      }
+      break;
 
-    swap(&arr[i + 1], &arr[high]);
-    return i + 1;
+    case FLOAT:
+      float* floatptr = (float*) obj;
+      for(int rank = 0; rank < comm_sz; rank++){
+        if (my_rank == rank){
+          printf("my_rank = %d\n", my_rank);
+          for(int ind = 0; ind < lenght; ind++)
+            printf("FLOAT[%d] = %.2f\t", ind, floatptr[ind]);
+          printf("\n");
+        }
+        if(comm_sz != 1)
+          MPI_Barrier(comm);
+      }
+      break;
+
+    case UINT8:
+      uint8_t* uint8ptr = (uint8_t*) obj;
+      for(int rank = 0; rank < comm_sz; rank++){
+        if (my_rank == rank){
+          printf("my_rank = %d\n", my_rank);
+          for(int ind = 0; ind < lenght; ind++)
+            printf("UINT8[%d] = %u\t", ind, uint8ptr[ind]);
+          printf("\n");
+        }
+        if(comm_sz != 1)
+          MPI_Barrier(comm);
+      }
+      break;
+    
+    case UINT16:
+      uint16_t* uint16ptr = (uint16_t*) obj;
+      for(int rank = 0; rank < comm_sz; rank++){
+        if (my_rank == rank){
+          printf("my_rank = %d\n", my_rank);
+          for(int ind = 0; ind < lenght; ind++)
+            printf("UINT16[%d] = %u\t", ind, uint16ptr[ind]);
+          printf("\n");
+        }
+        if(comm_sz != 1)
+          MPI_Barrier(comm);
+      }
+      break;
+
+    default:
+      printf("no type inserted\n");
+      break;
+  }
 }
-
-void quicksort(float arr[], int low, int high) {
-    if (low < high) {
-        int pi = partition(arr, low, high);
-
-        quicksort(arr, low, pi - 1);
-        quicksort(arr, pi + 1, high);
-    }
-}
-
-void Quicksort(float* input, size_t dim){
-  quicksort(input, 0, (int) dim -1);
-}
-
-/*
-//Mean of a float array, can be used as offset of affine reduction
-float VectorMean(float* vec, int lenght){
-	float out = 0;
-	float len = (float) len;
-	#pragma omp parallel for default(none) shared(vec,lenght, len) reduction(+:out)
-	for(int i = 0; i<lenght; i++)
-		out+= vec[i]/len;
-
-	return out;
-}*/
-
-/* Utilizes a struct to store datas about the vector to		*
- * quantize. The desired data to store are the mean, the	*
- * highest value and the lowest value.				*
- * OpenMP is used to parallelize the work and three reduction	*
- * variables are declared to do the job.			*
- * Those data are then used to calculate the range [a,b] to use	*
- * in the affine or symmetric quantization.			*
- *								*
- * input:	input vector pointer,				*
- *		input vector lenght,				*
- *		output structure pointer			*/
-
-/*void VectorDatas(float* vec, int lenght, struct q_val* out){
-	float len = (float) lenght;
-	float mean = vec[0]/len;
-	float minimum = vec[0];
-	float maximum = vec[0];
-	#pragma omp parallel for default(none) shared(vec, lenght, len) \
-		reduction(+: mean) reduction(min: minimum) reduction(max: maximum)
-	for(int i=1; i<lenght;i++){
-		mean += vec[i]/len;
-		if(vec[i] < minimum)		minimum = vec[i];
-		else if(vec[i] > maximum)	maximum = vec[i];
-	}
-
-	out->mean = mean;
-	out->min = minimum;
-	out->max = maximum;
-}*/
 

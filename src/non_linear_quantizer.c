@@ -65,12 +65,13 @@ void ALawExpander (float* in, size_t input_size){
 
 float* RangeReducer(float* in, size_t input_size, float* min, float* max){
 	float* out = malloc(input_size*sizeof(float));
-	MinMax(in, input_size, min, max);
+	MinMax(in, input_size, min, max, 0);
 	float range = *max - *min;
+  float one_over_range = 1 / range;
 
 	#pragma omp parallel for
 	for(int i = 0; i < input_size; i++)
-		out[i] = ((in[i] - *min) * 2) / range - 1;
+		out[i] = ((in[i] - *min) * 2) * one_over_range - 1;
 	
 	return out;
 }
@@ -78,10 +79,11 @@ float* RangeReducer(float* in, size_t input_size, float* min, float* max){
 
 void RangeRestorer(float* in, size_t input_size, float min, float max){
 	float range = max - min;
-	
+	float onehalf = 0.5;
+
 	#pragma omp parallel for
 	for(int i = 0; i < input_size; i++)
-		in[i] = ((in[i] + 1) * range) / 2 + min;
+		in[i] = ((in[i] + 1) * range) * onehalf + min;
 }
 
 
