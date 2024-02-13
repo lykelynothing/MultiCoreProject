@@ -17,7 +17,6 @@ struct unif_quant* HomomorphicQuantization(float* input, size_t input_size, MPI_
   MPI_Comm_size(comm, &comm_sz);
   struct unif_quant* out = (struct unif_quant*) malloc(sizeof(struct unif_quant));
   out -> vec = (uint8_t*) malloc(input_size * sizeof(uint8_t));
-  printf("REPR_RANGE: %d\n", REPR_RANGE); 
   float min_max[2];
 
   MinMax(input, input_size, &min_max[0], &min_max[1], 1);
@@ -67,12 +66,13 @@ float* HomomorphicDequantization(uint8_t* quantized, float min, float max, int c
   float new_min;
   if(reduction_flag == 1) new_min = comm_sz * min;
   else new_min = min;
+  
 
   float* out = malloc(input_size * sizeof(float));
   
   #pragma omp parallel for
   for(size_t i = 0; i < input_size; i++)
-    out[i] = ((float)quantized[i]) * step + new_min;
+    out[i] = ((float) quantized[i]) * step + new_min;
 
   return out;
 }
