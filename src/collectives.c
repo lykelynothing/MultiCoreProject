@@ -42,8 +42,6 @@ int RingAllreduce();
  * RING = 1 
  * default: NO_QUANTIZATION*/
 int MPI_Allreduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype datatype, MPI_Op op, MPI_Comm comm){
-  //The flag is used to allow for normal MPI_Allreduce use
-  
   int env_var[2];
   GetEnvVariables(env_var);
 
@@ -60,7 +58,7 @@ int MPI_Allreduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype da
         RecursiveHalvingSendHomomorphic(my_rank, comm_sz, count, (float *) sendbuf, (float *) recvbuf);
       break;
     case 1:
-      RingAllreduce(my_rank, comm_sz, count, env_var[0], (float *) sendbuf, (float**) &recvbuf);
+      RingAllreduce(my_rank, comm_sz, (float*) sendbuf, count, (float**) &recvbuf);
       break;
     default:
       PMPI_Allreduce(sendbuf, recvbuf, count, datatype, op, comm);
@@ -169,14 +167,13 @@ int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count, float *
  * -  in the second part the reduced part of the vectors are then gathered by all processes
  *    in what is effectively a ring MPI_Allgather
  * TODO: This implementation of the ring allreduce uses only an Homomorphic Quantization scheme, other quant algo needs to be added.*/
-int RingAllreduce(int my_rank, int comm_sz, size_t dim, int algo, float* my_numbers, float** recvbuf){
-  //the recieving array is quantized using an Homomorphic Uniform Quantization, i.e. a quantization
-  //that preserves some operation of quantized data, in our case the addition (Q(v1)+Q(v2)=Q(v1+v2)
-  struct unif_quant* struct_ptr = HomomorphicQuantization(my_numbers, dim, MPI_COMM_WORLD);
+int RingAllreduce(int my_rank, int comm_sz, float* data, size_t dim, float** output_ptr) {
+  struct unif_quant* quantized_data = HomomorphicQuantization(data, dim, MPI_COMM_WORLD);
+
   //The array will be divided into  N equal-sized chunks
   size_t size = dim / comm_sz;
-  size_t remainder = dim % comm_sz;
-
+  size_t remainder = dim % size;
+  
   //Segment sizes and segment ends arrays are used to work as indexes for 
   //scattering and gathering the array.
   size_t* segment_sizes = malloc(comm_sz * sizeof(size_t));
@@ -186,83 +183,74 @@ int RingAllreduce(int my_rank, int comm_sz, size_t dim, int algo, float* my_numb
   segment_ends[0] = segment_sizes[0];
   for (int i = 1; i < comm_sz; i++)
     segment_ends[i] = segment_sizes[i] + segment_ends[i-1];
-  
+
   //This will store the total output and will be used when sending parts of the array 
   //The quantized array gets first copied.
   uint8_t* output = malloc(dim * sizeof(uint8_t));
   for (int i = 0; i < dim; i++)
-    output[i] = struct_ptr->vec[i]; 
-  
-  //This will be a temporary buffer for incoming data
+    output[i] = quantized_data->vec[i];
+
+  // Temporary buffer for incoming data
   uint8_t* buffer = malloc(segment_sizes[0] * sizeof(uint8_t));
-  
+
   const size_t recv_from = (my_rank - 1 + comm_sz) % comm_sz;
   const size_t send_to = (my_rank + 1) % comm_sz;
   
-  //Used later for immediate send and receive.
+  //Status and request are needed due to the use of MPI_Irecv 
   MPI_Status recv_status;
   MPI_Request recv_req;
-  
 
+  MPI_Datatype datatype;
+  if (BITS == 8)
+    datatype = MPI_UINT8_T;
+  else if (BITS == 16)
+    datatype = MPI_UINT16_T;
+  
   //Scattering of the array. In each iteration each process recieves from its "recv_from"
   //process a chunk of the scattered array. 
-  for (int i = 0; i < comm_sz - 1; i++){
+  for (int i = 0; i < comm_sz - 1; i++) {
     int recv_chunk = (my_rank - i - 1 + comm_sz) % comm_sz;
     int send_chunk = (my_rank - i + comm_sz) % comm_sz;
-
     uint8_t* segment_send = &(output[segment_ends[send_chunk] - segment_sizes[send_chunk]]);
-    
+
     //The Irecv is used because each process will encounter the recv part first and we don't want it to stop
     //here without sending.
-    MPI_Irecv(buffer, segment_sizes[recv_chunk], MPI_UINT8_T, recv_from, 0, MPI_COMM_WORLD, &recv_req);
-    MPI_Send(segment_send, segment_sizes[send_chunk], MPI_UINT8_T, send_to, 0, MPI_COMM_WORLD);
-    
+    MPI_Irecv(buffer, segment_sizes[recv_chunk], datatype, recv_from, 0, MPI_COMM_WORLD, &recv_req);
+    MPI_Send(segment_send, segment_sizes[send_chunk], datatype, send_to, 0, MPI_COMM_WORLD);
+
     uint8_t* segment_update = &(output[segment_ends[recv_chunk] - segment_sizes[recv_chunk]]);
-    
-    //This MPI_Wait is needed due to the use of MPI_Irecv
+
+    // Wait for recv to complete before reduction
     MPI_Wait(&recv_req, &recv_status);
-    //Reduction of the recieved chunk is done here
-    /*if(my_rank==0){
-      printf("Iteration of outer loop: %d of %d\n", i, comm_sz);
-      printf("\tEntering inner loop with\n\trecv_chunk=%d\t segment_sizes[%d]= %lu\n", recv_chunk, recv_chunk, segment_sizes[recv_chunk]);
-    }*/
-    for(size_t i = 0; i < segment_sizes[recv_chunk]; i++){
-      /*if (my_rank == 0)
-        printf("\t\tsegmment_update[%lu] = %u \t buffer[%lu] = %u\t", i, segment_update[i], i, buffer[i]);*/
+
+    for(size_t i = 0; i < segment_sizes[recv_chunk]; i++)
       segment_update[i] += buffer[i];
-      /*if (my_rank == 0)
-        printf("UPDATED: %u\n", segment_update[i]);*/
-    }
-    MPI_Barrier(MPI_COMM_WORLD);
   }
-  
+
   //Gathering of the reduced array. The structure of this gathering is exactly the same as the 
   //scattering just done but without immediate communications.
-  for (size_t i = 0; i < comm_sz - 1; i++) {
+  for (size_t i = 0; i < comm_sz - 1; ++i) {
     int send_chunk = (my_rank - i + 1 + comm_sz) % comm_sz;
     int recv_chunk = (my_rank - i + comm_sz) % comm_sz;
+
     uint8_t* segment_send = &(output[segment_ends[send_chunk] - segment_sizes[send_chunk]]);
     uint8_t* segment_recv = &(output[segment_ends[recv_chunk] - segment_sizes[recv_chunk]]);
     
-    //Sendrecv is used to do both the send and the recieve in just one call.
-    MPI_Sendrecv(segment_send, segment_sizes[send_chunk], MPI_UINT8_T, send_to, 0, segment_recv,
-                segment_sizes[recv_chunk], MPI_UINT8_T, recv_from, 0, MPI_COMM_WORLD, &recv_status); 
+    MPI_Sendrecv(segment_send, segment_sizes[send_chunk], datatype, send_to, 0, segment_recv, segment_sizes[recv_chunk], datatype, recv_from, 0, MPI_COMM_WORLD, &recv_status);
   }
   
-  //Thre output is stored into recvbuf
-  *recvbuf = HomomorphicDequantization(output, struct_ptr->min, struct_ptr->max, comm_sz, dim);
-  
+//TODO: qua sarebbe da cambiare il pezzo
+  float* temp =  HomomorphicDequantization(output, quantized_data->min, quantized_data->max, comm_sz, dim, 1);
+  for(int i=0; i<dim; i++){
+    *output_ptr[i] = temp[i];
+  }
+  //Free of temporary data
   free(buffer);
-  free(struct_ptr -> vec);
-  free(struct_ptr);
-  free(output);
   free(segment_sizes);
   free(segment_ends);
 
   return MPI_SUCCESS;
 }
-
-
 
 /* Function takes float vector and quantizes it according to
  * the kind of algorithm specified by int algo. Returns the 
