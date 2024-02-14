@@ -89,6 +89,9 @@ void GetEnvVariables(int* var){
   // TODO: error handling when var isn't found
   if ((send_algo_var == NULL) | (quant_env_var == NULL) | (bits_env_var == NULL)){
     printf("\nError : at least one environmental variable was not found \n");
+    printf("BITS_VAR: %s\n", bits_env_var);
+    printf("QUANT_ALGO: %s\n", send_algo_var);
+    printf("SEND_ALGO: %s\n", quant_env_var);
     var[1] = -1;
     return;
   }
@@ -199,7 +202,7 @@ float sign(float x){
 float MeanSquaredError(float* v1, float* v2, size_t lenght){
   float out=0;
   
-  #pragma omp parallel for reduction(+:out)
+  #pragma omp parallel for reduction( + : out)
 	for(int i = 0; i<lenght; i++)
 		out+= (v1[i]-v2[i])*(v1[i]-v2[i]);
 

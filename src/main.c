@@ -22,6 +22,11 @@ int main(int argc, char** argv){
 			dim = 8;
 	}
 
+  float NMSE;  
+
+  clock_t start, end;
+  double cpu_time;
+
   int my_rank, comm_sz;
   MPI_Init(NULL, NULL);
 	MPI_Pcontrol(2);
@@ -38,20 +43,27 @@ int main(int argc, char** argv){
   srand(time(NULL) + my_rank);
 	
   float* in = RandFloatGenerator(dim, -500.0, 500.0);
+ /* 
   if(my_rank==0) printf("\nORIGINAL VECTORS\n");
   MPI_Barrier(MPI_COMM_WORLD);
   ProcessPrinter(in, dim, my_rank, comm_sz, MPI_COMM_WORLD, FLOAT);
-  
+ */
+
   /*struct unif_quant* q = HomomorphicQuantization(in, dim, MPI_COMM_WORLD); 
   if(my_rank==0) printf("\nQUANTIZED VECTORS\n");
   MPI_Barrier(MPI_COMM_WORLD);
   ProcessPrinter(q->vec, dim, my_rank, comm_sz, MPI_COMM_WORLD, UINT8);
   */
-  float* ring_allred = malloc(dim * sizeof(float));
-	MPI_Allreduce(in, ring_allred, dim, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
-  if(my_rank==0) printf("\nRING_ALLRED VECTOR\n");
+  float* out = malloc(dim * sizeof(float));
+  
+  start = clock();
+	MPI_Allreduce(in, out, dim, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
+  end = clock();
+  cpu_time = ((double) (end - start)) / CLOCKS_PER_SEC;
+/*
+  if(my_rank==0) printf("\nALLRED VECTOR\n");
   MPI_Barrier(MPI_COMM_WORLD);
-  ProcessPrinter(ring_allred, dim, my_rank, comm_sz, MPI_COMM_WORLD, FLOAT);
+  ProcessPrinter(out, dim, my_rank, comm_sz, MPI_COMM_WORLD, FLOAT);
 
   /*float* dequantized = HomomorphicDequantization(q->vec, q->min, q->max, comm_sz, dim, 0);
   if(my_rank==0) printf("\nDEQUANTIZED AFTER RING ALLRED VECTOR\n");
@@ -64,16 +76,36 @@ int main(int argc, char** argv){
   MPI_Barrier(MPI_COMM_WORLD);
   ProcessPrinter(reduced, dim, my_rank, comm_sz, MPI_COMM_WORLD, FLOAT);
   */
+
+
   float* control = malloc(dim * sizeof(float));
-	PMPI_Allreduce(in, control, dim, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
+//	PMPI_Allreduce(in, control, dim, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
+
+
+/*  
   if(my_rank==0) printf("\nCONTROL VECTOR\n");
   MPI_Barrier(MPI_COMM_WORLD);
   ProcessPrinter(control, dim, my_rank, comm_sz, MPI_COMM_WORLD, FLOAT);
 
+  if (my_rank == 0) 
+    printf("\nTime Elapsed : \n");
+
+  MPI_Barrier(MPI_COMM_WORLD);
+  printf("\n\nRank %d : %lf \n", my_rank, cpu_time);
+
+*/
+  if (my_rank == 0){
+    NMSE = NormalizedMSE(out, control, dim);
+    printf("%f\n", NMSE);
+    printf("%lf\n", cpu_time);
+    } 
+
+
+
   free(in);
   //free(q->vec);
   //free(q);
-  free(ring_allred);
+  free(out);
   //free(dequantized);
   //free(reduced);
   free(control);

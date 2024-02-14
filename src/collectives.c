@@ -139,19 +139,15 @@ int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count, float *
     }
     remaining = remaining / 2;
   }
-  // Now rank 0 dequantizes and scatters
-  // TODO: maybe scatter and then each one dequantizes
   
-  if (my_rank == 0){
-    // this doesn't affect recvbuff
-    tmp = HomomorphicDequantization(struct_ptr->vec, struct_ptr->min, struct_ptr->max, comm_sz, count, 1);
-    for (int i = 0; i < count; i++){
-      recvbuf[i] = tmp[i];
-    }
-    free(tmp);
-  }
-  MPI_Bcast(recvbuf, count, MPI_FLOAT, 0, MPI_COMM_WORLD);
+  MPI_Bcast(struct_ptr->vec, count, MPI_FLOAT, 0, MPI_COMM_WORLD);
 
+  tmp = HomomorphicDequantization(struct_ptr->vec, struct_ptr->min, struct_ptr->max, comm_sz, count, 1);
+  // TODO: figure out why we need to copy from tmp to recvbuf and not directly store in recvbuf
+  for (int i = 0; i < count; i++)
+    recvbuf[i] = tmp[i];
+
+  free(tmp);
   free(struct_ptr -> vec);
   free(struct_ptr);
 
