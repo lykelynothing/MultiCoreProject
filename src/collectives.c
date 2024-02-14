@@ -58,7 +58,7 @@ int MPI_Allreduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype da
         RecursiveHalvingSendHomomorphic(my_rank, comm_sz, count, (float *) sendbuf, (float *) recvbuf);
       break;
     case 1:
-      RingAllreduce(my_rank, comm_sz, (float*) sendbuf, count, (float**) &recvbuf);
+      RingAllreduce(my_rank, comm_sz, (float*) sendbuf, count, (float*) recvbuf);
       break;
     default:
       PMPI_Allreduce(sendbuf, recvbuf, count, datatype, op, comm);
@@ -144,7 +144,7 @@ int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count, float *
   
   if (my_rank == 0){
     // this doesn't affect recvbuff
-    tmp = HomomorphicDequantization(struct_ptr->vec, struct_ptr->min, struct_ptr->max, comm_sz, count);
+    tmp = HomomorphicDequantization(struct_ptr->vec, struct_ptr->min, struct_ptr->max, comm_sz, count, 1);
     for (int i = 0; i < count; i++){
       recvbuf[i] = tmp[i];
     }
@@ -167,7 +167,7 @@ int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count, float *
  * -  in the second part the reduced part of the vectors are then gathered by all processes
  *    in what is effectively a ring MPI_Allgather
  * TODO: This implementation of the ring allreduce uses only an Homomorphic Quantization scheme, other quant algo needs to be added.*/
-int RingAllreduce(int my_rank, int comm_sz, float* data, size_t dim, float** output_ptr) {
+int RingAllreduce(int my_rank, int comm_sz, float* data, size_t dim, float* output_ptr) {
   struct unif_quant* quantized_data = HomomorphicQuantization(data, dim, MPI_COMM_WORLD);
 
   //The array will be divided into  N equal-sized chunks
@@ -242,7 +242,7 @@ int RingAllreduce(int my_rank, int comm_sz, float* data, size_t dim, float** out
 //TODO: qua sarebbe da cambiare il pezzo
   float* temp =  HomomorphicDequantization(output, quantized_data->min, quantized_data->max, comm_sz, dim, 1);
   for(int i=0; i<dim; i++){
-    *output_ptr[i] = temp[i];
+    output_ptr[i] = temp[i];
   }
   //Free of temporary data
   free(buffer);
