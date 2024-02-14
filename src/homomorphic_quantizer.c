@@ -10,7 +10,7 @@
 /* Work exactly like a normal Uniform Ranged Quantization but here the quantization interval 
  * is shared between all the processes.
  * To allow for sum of quantized values, we need to make the REPR_RANGE smaller. The this is done
- * by dividing the REPR_RANGE by pow=2^n such that >=comm_sz*/
+ * by dividing the REPR_RANGE by pow=2^n such that >=comm_sz */
 struct unif_quant* HomomorphicQuantization(float* input, size_t input_size, MPI_Comm comm){
   struct unif_quant* out = (struct unif_quant*) malloc(sizeof(struct unif_quant));
   out -> vec = (uint8_t*) malloc(input_size * sizeof(uint8_t));

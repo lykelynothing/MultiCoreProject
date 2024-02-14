@@ -18,8 +18,11 @@ void* Receive();
 void* Quantize();
 void DequantizeVector();
 int RecursiveHalvingSend();
+int RecursiveHalvingSendHomomorphic();
 int RingAllreduce();
 
+// TODO: Write correct precise returns 
+// TODO: Create custom datatypes only once
 
 /* Custom MPI_Allreduce that will intercept any calls to it.
  * Will look for the environment variable "QUANT_ALGO" and choose
@@ -51,7 +54,10 @@ int MPI_Allreduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype da
   //TODO: need to add rcv buff that will store final sum in RecursiveHalvingSend
   switch (env_var[1]){
     case 0:
-      RecursiveHalvingSend(my_rank, comm_sz, count, env_var[0], (float *) sendbuf);
+      if (env_var[0] != 3)
+        RecursiveHalvingSend(my_rank, comm_sz, count, env_var[0], (float *) sendbuf);
+      else 
+        RecursiveHalvingSendHomomorphic(my_rank, comm_sz, count, (float *) sendbuf, (float *) recvbuf);
       break;
     case 1:
       RingAllreduce(my_rank, comm_sz, count, env_var[0], (float *) sendbuf, (float**) &recvbuf);
@@ -70,6 +76,7 @@ int MPI_Allreduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype da
  * requantize the partial sum vector and send it to the next process.
  * For now assumes comm_sz is always divisible by 2. */
 // TODO: Free stuff
+// TODO: Scatter final results
 int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, int algo, float * my_numbers) { 
   int remaining = comm_sz;
   int half;
@@ -102,8 +109,53 @@ int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, int algo, float * my
 
   if (my_rank == 0){
     for (int i = 0; i < dim; i++)
-      printf("out[%i]=%lf\n", i, partial_sum[i]);
+      printf("out[%d]=%lf\n", i, partial_sum[i]);
   }
+  
+  return MPI_SUCCESS;
+}
+
+/* Like Normal Recursive halving but this time the quantization and
+ * dequantization only happen once i.e. before and after all reductions 
+ * respectively have been executed */
+int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count, float * sendbuf, float * recvbuf){
+  int remaining = comm_sz;
+  int half;
+  struct unif_quant * struct_ptr = HomomorphicQuantization(sendbuf, count, MPI_COMM_WORLD);
+  struct unif_quant * rcv_bf;
+  float * tmp;
+
+  while (remaining != 1) {
+    half = remaining / 2;
+    if (my_rank < half) {
+      int source = half + my_rank;
+      // receive struct 
+      rcv_bf = (struct unif_quant *) Receive(2, count, source);
+      for (int i = 0; i < count; i++)
+        // TODO: optimize this
+        struct_ptr->vec[i] = struct_ptr->vec[i] + rcv_bf->vec[i];
+    } else {
+      int dest = my_rank % half;
+      // send struct
+      Send(struct_ptr, 2, count, dest);
+    }
+    remaining = remaining / 2;
+  }
+  // Now rank 0 dequantizes and scatters
+  // TODO: maybe scatter and then each one dequantizes
+  
+  if (my_rank == 0){
+    // this doesn't affect recvbuff
+    tmp = HomomorphicDequantization(struct_ptr->vec, struct_ptr->min, struct_ptr->max, comm_sz, count);
+    for (int i = 0; i < count; i++){
+      recvbuf[i] = tmp[i];
+    }
+    free(tmp);
+  }
+  MPI_Bcast(recvbuf, count, MPI_FLOAT, 0, MPI_COMM_WORLD);
+
+  free(struct_ptr -> vec);
+  free(struct_ptr);
 
   return MPI_SUCCESS;
 }
@@ -147,7 +199,7 @@ int RingAllreduce(int my_rank, int comm_sz, size_t dim, int algo, float* my_numb
   const size_t recv_from = (my_rank - 1 + comm_sz) % comm_sz;
   const size_t send_to = (my_rank + 1) % comm_sz;
   
-  //Used later for immediate send and recieve.
+  //Used later for immediate send and receive.
   MPI_Status recv_status;
   MPI_Request recv_req;
   
@@ -201,6 +253,8 @@ int RingAllreduce(int my_rank, int comm_sz, size_t dim, int algo, float* my_numb
   *recvbuf = HomomorphicDequantization(output, struct_ptr->min, struct_ptr->max, comm_sz, dim);
   
   free(buffer);
+  free(struct_ptr -> vec);
+  free(struct_ptr);
   free(output);
   free(segment_sizes);
   free(segment_ends);
@@ -271,8 +325,8 @@ void DequantizeVector(void * struct_ptr, float ** dequantized, int algo, int dim
 
 /* Calls mpi to receive struct and quantized vector. Handles
  * all kinds of struct and attaches to vec field the received
- * quantized vector (uint8) */
-// THE FUNCTION DOESN'T FREE THE MEMORY IT ALLOCATES,
+ * quantized vector (uint8). Returns pointer to received struct */
+// TODO: THE FUNCTION DOESN'T FREE THE MEMORY IT ALLOCATES,
 // REMEMBER TO DO SO OUTSIDE OF IT
 void * Receive(int algo, int dim, int source){
   void * void_ptr;
@@ -364,28 +418,3 @@ int Send(void * struct_ptr, int algo, int dim, int dest){
   
   return MPI_SUCCESS;
 }
-
-
-/* Same as Dequantize vector but for 2 vectors */
-/*
-void DequantizeTwoVectors(void * struct_ptr1, void * struct_ptr2, float * dequantized_1, float * dequantized_2, int algo, int dim) {
-  switch (algo)
-  {
-  case 0:
-    struct lloyd_max_quant *str1 = (struct lloyd_max_quant *)struct_ptr1;
-    struct lloyd_max_quant *str2 = (struct lloyd_max_quant *)struct_ptr2;
-    dequantized_1 = LloydMaxDequantizer(str1, dim);
-    dequantized_2 = LloydMaxDequantizer(str2, dim);
-  case 1:
-    struct non_linear_quant *str1 = (struct non_linear_quant *)struct_ptr1;
-    struct non_linear_quant *str2 = (struct non_linear_quant *)struct_ptr2;
-    dequantized_1 = NonLinearDequantization(str1, dim);
-    dequantized_2 = NonLinearDequantization(str2, dim);
-  case 2:
-    struct unif_quant *str1 = (struct unif_quant *)struct_ptr1;
-    struct unif_quant *str2 = (struct unif_quant *)struct_ptr2;
-    dequantized_1 = UniformRangedDequantization(str1, dim);
-    dequantized_2 = UniformRangedDequantization(str2, dim);
-  }
-}*/
-

@@ -86,6 +86,12 @@ void GetEnvVariables(int* var){
   quant_env_var = getenv("QUANT_ALGO");
   send_algo_var = getenv("SEND_ALGO");
   
+  // TODO: error handling when var isn't found
+  if (send_algo_var == NULL | quant_env_var == NULL | bits_env_var == NULL){
+    printf("\nError : at least one environmental variable was not found \n");
+    var[1] = -1;
+    return;
+  }
 
   if(strcmp(send_algo_var, "REC_HALVING") == 0)
     var[1] = 0;
