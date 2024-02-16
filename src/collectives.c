@@ -120,7 +120,7 @@ int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, int algo, float * my
   }
   PMPI_Bcast(recv_buf, dim, MPI_FLOAT, 0, MPI_COMM_WORLD);
   // idk why this breaks it
-  //Free(algo, struct_ptr);
+  // Free(algo, struct_ptr);
   free(dequantized);
   return MPI_SUCCESS;
 }
@@ -373,7 +373,7 @@ void * Receive(int algo, int dim, int source, void * void_ptr){
     MPI_Type_free(type_ptr);
     break;
   default:
-    printf("ERROR!! Quant algo not valid (recieve call)\n");
+    printf("ERROR!! Quant algo not valid\n");
     break;
   }
 
