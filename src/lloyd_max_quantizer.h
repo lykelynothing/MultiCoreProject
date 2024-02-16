@@ -5,9 +5,9 @@
 
 #include "tools.h"
 
-struct lloyd_max_quant* LloydMaxQuantizer(float* in, size_t input_size);
+struct lloyd_max_quant* LloydMaxQuantizer(float* in, size_t input_size, void * struct_ptr);
 
-float* LloydMaxDequantizer(struct lloyd_max_quant* in, size_t input_size);
+float* LloydMaxDequantizer(struct lloyd_max_quant* in, size_t input_size, float * out);
 
 #endif
 

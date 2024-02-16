@@ -24,7 +24,8 @@ int main(int argc, char** argv){
 
   float NMSE;  
 
-  clock_t start, end;
+  double start, end;
+  double loc_elapsed;
   double cpu_time;
 
   int my_rank, comm_sz;
@@ -56,10 +57,13 @@ int main(int argc, char** argv){
   */
   float* out = malloc(dim * sizeof(float));
   
-  start = clock();
+  MPI_Barrier(MPI_COMM_WORLD);
+  start = MPI_Wtime();
 	MPI_Allreduce(in, out, dim, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
-  end = clock();
-  cpu_time = ((double) (end - start)) / CLOCKS_PER_SEC;
+  end = MPI_Wtime();
+  loc_elapsed = end - start;
+
+  PMPI_Reduce(&loc_elapsed, &cpu_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
 /*
   if(my_rank==0) printf("\nALLRED VECTOR\n");
   MPI_Barrier(MPI_COMM_WORLD);
@@ -98,6 +102,7 @@ int main(int argc, char** argv){
     NMSE = NormalizedMSE(out, control, dim);
     printf("%f\n", NMSE);
     printf("%lf\n", cpu_time);
+    printf("%ld\n", dim);
     } 
 
 

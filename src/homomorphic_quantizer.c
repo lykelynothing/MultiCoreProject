@@ -11,16 +11,14 @@
  * is shared between all the processes.
  * To allow for sum of quantized values, we need to make the REPR_RANGE smaller. The this is done
  * by dividing the REPR_RANGE by pow=2^n such that >=comm_sz */
-struct unif_quant* HomomorphicQuantization(float* input, size_t input_size, MPI_Comm comm){
+struct unif_quant* HomomorphicQuantization(float* input, size_t input_size, MPI_Comm comm, void * struct_ptr){
   int my_rank, comm_sz;
   MPI_Comm_rank(comm, &my_rank);
   MPI_Comm_size(comm, &comm_sz);
-  struct unif_quant* out = (struct unif_quant*) malloc(sizeof(struct unif_quant));
-  out -> vec = (uint8_t*) malloc(input_size * sizeof(uint8_t));
+  struct unif_quant* out = (struct unif_quant*) struct_ptr;
   float min_max[2];
 
   MinMax(input, input_size, &min_max[0], &min_max[1], 1);
-  
   //Standard call of MPI_Allreduce with MPI_Max on an array of -min and max to get the
   //smallest min and biggest between the vectors
   PMPI_Allreduce(MPI_IN_PLACE, min_max, 2, MPI_FLOAT, MPI_MAX, comm);
@@ -45,14 +43,13 @@ struct unif_quant* HomomorphicQuantization(float* input, size_t input_size, MPI_
 		float quant = round((input[i] - min) * step);
 		out->vec[i] = (uint8_t) quant;
 	}
-
 	return out;
 }
 
 /* For the dequantization step, the new minimum will be comm_sz*quantization_minimum
  * because this dequantization will be done on reduced data (hence each element will be the sum
  * of comm_sz quantized elements).*/
-float* HomomorphicDequantization(uint8_t* quantized, float min, float max, int comm_sz, size_t input_size, int reduction_flag){
+float* HomomorphicDequantization(uint8_t* quantized, float min, float max, int comm_sz, size_t input_size, int reduction_flag, float * out){
   //same custom REPR_RANGE used in quantization 
   int pow = 1;
   while (pow<comm_sz){
@@ -66,9 +63,6 @@ float* HomomorphicDequantization(uint8_t* quantized, float min, float max, int c
   float new_min;
   if(reduction_flag == 1) new_min = comm_sz * min;
   else new_min = min;
-  
-
-  float* out = malloc(input_size * sizeof(float));
   
   #pragma omp parallel for
   for(size_t i = 0; i < input_size; i++)

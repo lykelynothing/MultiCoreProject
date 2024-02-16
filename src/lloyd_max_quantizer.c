@@ -83,10 +83,9 @@ void UpdateCodebook(float* input, uint8_t* assignments, float* codebook, size_t 
  * you've done a predefined number of iterations.                             / 
  * Once you've done that return the codebook of centroids and the quantized   / 
  * vector.                                                                    */
-struct lloyd_max_quant * LloydMaxQuantizer(float* in, size_t input_size){
+struct lloyd_max_quant * LloydMaxQuantizer(float* in, size_t input_size, void * struct_ptr){
 	//define and allocate memory for struct and vector inside the struct
-	struct lloyd_max_quant * out = (struct lloyd_max_quant*) malloc(sizeof(struct lloyd_max_quant));
-	out->vec = (uint8_t*) malloc(input_size*sizeof(uint8_t)); 
+	struct lloyd_max_quant * out = (struct lloyd_max_quant*) struct_ptr;
 	MinMax(in, input_size, &(out->min), &(out->max), 0);
 
 	// Initialization 
@@ -105,8 +104,7 @@ struct lloyd_max_quant * LloydMaxQuantizer(float* in, size_t input_size){
 }
 
 
-float * LloydMaxDequantizer(struct lloyd_max_quant * in, size_t input_size){	
-	float* out = malloc(input_size*sizeof(float));
+float * LloydMaxDequantizer(struct lloyd_max_quant * in, size_t input_size, float * out){	
   
   #pragma omp parallel for
 	for(int i = 0; i < input_size; i++){

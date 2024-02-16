@@ -14,19 +14,16 @@
  * Min and max of original vector will be stored because needed
  * for dequantization.
  * The quantization itself is done in parallel with OpenMP. */
-struct unif_quant* UniformRangedQuantization(float* in, size_t input_size){
+struct unif_quant* UniformRangedQuantization(float* in, size_t input_size, void * struct_ptr){
 	//define the output struct and allocate the memory for the vector itself
-	struct unif_quant* out = (struct unif_quant*) malloc(sizeof(struct unif_quant));
-	out->vec = (uint8_t*) malloc(input_size * sizeof(uint8_t));
-
+	struct unif_quant* out = (struct unif_quant*) struct_ptr;
 	//run through the vector and saves min and max value in the struct 
 	MinMax(in, input_size, &(out->min), &(out->max), 0);
 
 	//calculate the steps of the quantization
 	float range = out->max - out->min;
 	float min = out->min;
-  float step = (REPR_RANGE - 1) / range;
-
+  	float step = (REPR_RANGE - 1) / range;
 	#pragma omp parallel for
 	for(int i = 0; i < input_size; i++){
 		float quant = round((in[i] - min) * step);
@@ -41,9 +38,7 @@ struct unif_quant* UniformRangedQuantization(float* in, size_t input_size){
  * A vector of uint8_t, its lenght, a min and a max value (of data 
  * before quantization) are needed as input.
  * The out1put will be a vector of dequantized data out. */
-float* UniformRangedDequantization(struct unif_quant* in, size_t input_size){
-	//allocates memory for the dequantized vector
-	float* out = malloc(input_size*sizeof(float));
+float* UniformRangedDequantization(struct unif_quant* in, size_t input_size, float * out){
 	
 	//calculate dequantization steps
 	float max = in->max;

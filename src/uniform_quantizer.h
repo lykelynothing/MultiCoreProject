@@ -6,9 +6,9 @@
 
 #include "tools.h"
 
-struct unif_quant* UniformRangedQuantization(float* in, size_t input_size);
+struct unif_quant* UniformRangedQuantization(float* in, size_t input_size, void * struct_ptr);
 
-float* UniformRangedDequantization(struct unif_quant* in, size_t input_size);
+float* UniformRangedDequantization(struct unif_quant* in, size_t input_size, float * out);
 
 #endif
 
