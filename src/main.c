@@ -56,7 +56,6 @@ int main(int argc, char** argv){
   ProcessPrinter(q->vec, dim, my_rank, comm_sz, MPI_COMM_WORLD, UINT8);
   */
   float* out = malloc(dim * sizeof(float));
-  
   MPI_Barrier(MPI_COMM_WORLD);
   start = MPI_Wtime();
 	MPI_Allreduce(in, out, dim, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
@@ -83,7 +82,7 @@ int main(int argc, char** argv){
 
 
   float* control = malloc(dim * sizeof(float));
-//	PMPI_Allreduce(in, control, dim, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
+  PMPI_Allreduce(in, control, dim, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
 
 
 /*  

@@ -57,7 +57,7 @@ int MPI_Allreduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype da
   switch (env_var[1]){
     case 0:
       if (env_var[0] != 3)
-        RecursiveHalvingSend(my_rank, comm_sz, count, env_var[0], (float *) sendbuf);
+        RecursiveHalvingSend(my_rank, comm_sz, count, env_var[0], (float *) sendbuf, (float *) recvbuf);
       else 
         RecursiveHalvingSendHomomorphic(my_rank, comm_sz, count, (float *) sendbuf, (float *) recvbuf);
       break;
@@ -78,7 +78,7 @@ int MPI_Allreduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype da
  * requantize the partial sum vector and send it to the next process.
  * For now assumes comm_sz is always divisible by 2. */
 // TODO: Free stuff
-int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, int algo, float * my_numbers) { 
+int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, int algo, float * my_numbers, float * recv_buf) { 
   int remaining = comm_sz;
   int half;
   // used to store quantized received bits
@@ -86,6 +86,7 @@ int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, int algo, float * my
  
   float * dequantized = malloc(sizeof(float) * dim);
   float * partial_sum = my_numbers;
+  int sent = 0;
 
   // need to send struct as well
   while (remaining != 1) {
@@ -97,25 +98,29 @@ int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, int algo, float * my
       Receive(algo, dim, source, struct_ptr);
 
       // all will now be contained inside struct_ptr
-
       DequantizeVector(struct_ptr, dequantized, algo, dim);
       // probably need to free the vector allocated by the dequantizer
       // sum my array with received dequantized one
       for (int i = 0; i < dim; i++)
         partial_sum[i] = partial_sum[i] + dequantized[i];
-    } else {
+    } else if (sent == 0) {
       int dest = my_rank % half;
       // first quantize
       Quantize(partial_sum, dim , algo, struct_ptr);
       // now quantize uses same struct_ptr
       Send(struct_ptr, algo, dim, dest);
-
+      sent = 1;
     }
     remaining = remaining / 2;
   }
-
-  Free(algo, struct_ptr);
-
+  //TODO: BROADCAST RESULT!
+  if (my_rank == 0){
+    for (int i = 0; i < dim; i++)
+      recv_buf[i] = my_numbers[i];
+  }
+  PMPI_Bcast(recv_buf, dim, MPI_FLOAT, 0, MPI_COMM_WORLD);
+  // idk why this breaks it
+  //Free(algo, struct_ptr);
   free(dequantized);
   return MPI_SUCCESS;
 }
@@ -158,8 +163,8 @@ int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count, float *
     recvbuf[i] = tmp[i];
 
   free(tmp);
-  free(struct_ptr -> vec);
-  free(struct_ptr);
+  //free(struct_ptr -> vec);
+  //free(struct_ptr);
 
   return MPI_SUCCESS;
 }
@@ -327,8 +332,6 @@ void DequantizeVector(void * struct_ptr, float * dequantized, int algo, int dim)
 /* Calls mpi to receive struct and quantized vector. Handles
  * all kinds of struct and attaches to vec field the received
  * quantized vector (uint8). Returns pointer to received struct */
-// TODO: THE FUNCTION DOESN'T FREE THE MEMORY IT ALLOCATES,
-// REMEMBER TO DO SO OUTSIDE OF IT
 // Receives an already allocated struct
 void * Receive(int algo, int dim, int source, void * void_ptr){
   MPI_Datatype * type_ptr;
@@ -410,7 +413,6 @@ int Send(void * struct_ptr, int algo, int dim, int dest){
 
       MPI_Datatype MPI_Unif = UnifQuantType();
       type_ptr = &MPI_Unif;
-
       MPI_Send(str_ptr3, 1, MPI_Unif, dest, 0, MPI_COMM_WORLD);
       MPI_Send(str_ptr3->vec, dim, MPI_UINT8_T, dest, 0, MPI_COMM_WORLD);
       MPI_Type_free(type_ptr);
