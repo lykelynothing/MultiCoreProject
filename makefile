@@ -1,5 +1,5 @@
 CC = mpicc
-CFLAGS = -Wall -g -fopenmp 
+CFLAGS = -Wall -Werror -g -fopenmp 
 LDFLAGS = -lm
 
 SRC_DIR = src

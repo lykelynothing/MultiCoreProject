@@ -35,11 +35,26 @@ struct lloyd_max_quant{
 	uint8_t* vec;
 };
 
-MPI_Datatype UnifQuantType();
+//NOW FOR UINT16
+struct unif_quant_16{
+	float min;
+	float max;
+	uint16_t* vec;
+};
 
-MPI_Datatype NonLinearQuantType();
+struct non_linear_quant_16{
+	float min;
+	float max;
+	int type;
+	uint16_t* vec;
+};
 
-MPI_Datatype LloydMaxQuantType();
+struct lloyd_max_quant_16{
+	float min;
+	float max;
+	float* codebook;
+	uint16_t* vec;
+};
 
 float* RandFloatGenerator(size_t lenght, float lowerbound, float upperbound);
 
@@ -53,6 +68,6 @@ float MeanSquaredError(float* v1, float* v2, size_t lenght);
 
 float NormalizedMSE(float*v1, float* v2, size_t lenght);
 
-void ProcessPrinter(void* obj, size_t lenght, int my_rank, int comm_sz, MPI_Comm comm, TYPE t);
+void ProcessPrinter(void* obj, size_t lenght, int my_rank, int comm_sz, TYPE t);
 
 #endif

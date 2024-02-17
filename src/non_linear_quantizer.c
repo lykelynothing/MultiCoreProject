@@ -97,6 +97,17 @@ uint8_t* NormalizedSymmetricQuantization(float* in, size_t input_size){
 	return out;
 }
 
+uint16_t* NormalizedSymmetricQuantization_16(float* in, size_t input_size){
+	uint16_t* out = (uint16_t*) malloc(input_size*sizeof(uint16_t));
+	
+	float this_range = (REPR_RANGE - 1) / 2;
+	for(int i = 0; i < input_size; i++)
+		out[i] = (uint16_t) ((in[i] + 1) * this_range);
+	
+	return out;
+}
+
+
 float* NormalizedSymmetricDequantization(uint8_t* in, size_t input_size){
 	float* out = malloc(input_size*sizeof(float));
 	
@@ -107,8 +118,19 @@ float* NormalizedSymmetricDequantization(uint8_t* in, size_t input_size){
 	return out;
 }
 
-//A law needs to be expanded bc it's wrong: it assumes a different formula for values less than 1/alpha
-struct non_linear_quant* NonLinearQuantization(float* in, size_t input_size, int type){
+float* NormalizedSymmetricDequantization_16(uint16_t* in, size_t input_size){
+	float* out = malloc(input_size*sizeof(float));
+	
+	float this_range = (REPR_RANGE - 1) / 2;
+	for(int i = 0; i < input_size; i++)
+		out[i] = ((float) in[i]) / this_range - 1.0;
+
+	return out;
+}
+
+
+ 
+struct non_linear_quant* NonLinearQuantization(float* in, size_t input_size, int type, void* struct_ptr){
 	float min, max;
 	float* temp = RangeReducer(in, input_size, &min, &max);
 	
@@ -125,7 +147,7 @@ struct non_linear_quant* NonLinearQuantization(float* in, size_t input_size, int
 			return NULL;
 	}
 	
-	struct non_linear_quant* out = (struct non_linear_quant*) malloc(sizeof(struct non_linear_quant));
+	struct non_linear_quant* out = (struct non_linear_quant*) struct_ptr;
 	out->vec = NormalizedSymmetricQuantization(temp, input_size);
 	out->min = min;
 	out->max = max;
@@ -137,10 +159,54 @@ struct non_linear_quant* NonLinearQuantization(float* in, size_t input_size, int
 }
 
 
-
-float* NonLinearDequantization(struct non_linear_quant* in, size_t input_size){	
-	float* out = NormalizedSymmetricDequantization(in->vec, input_size);
+struct non_linear_quant_16* NonLinearQuantization_16(float* in, size_t input_size, int type, void* struct_ptr){
+	float min, max;
+	float* temp = RangeReducer(in, input_size, &min, &max);
 	
+	switch(type){
+		case 1:
+			MuLawCompander(temp, input_size);
+			break;
+		case 2:
+			ALawCompander(temp, input_size);
+			break;
+		default:
+			printf("\tERROR\t companding type not valid\n");
+			free(temp);
+			return NULL;
+	}
+	
+	struct non_linear_quant_16* out = (struct non_linear_quant_16*) struct_ptr;
+	out->vec = NormalizedSymmetricQuantization_16(temp, input_size);
+	out->min = min;
+	out->max = max;
+	out->type = type;
+
+	free(temp);
+	
+	return out;
+}
+
+float* NonLinearDequantization(struct non_linear_quant* in, size_t input_size, float* out){	
+  switch(in->type){
+		case 1:
+			MuLawExpander(out, input_size);
+			break;
+		case 2:
+			ALawExpander(out, input_size);
+			break;
+		default:
+			printf("\tERROR\t companding type not valid\n");
+			return NULL;
+	}
+
+	RangeRestorer(out, input_size, in->min, in->max);
+
+	return out;
+}
+
+
+float* NonLinearDequantization_16(struct non_linear_quant_16* in, size_t input_size, float* out){	
   switch(in->type){
 		case 1:
 			MuLawExpander(out, input_size);
