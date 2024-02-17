@@ -8,7 +8,11 @@
 
 struct unif_quant* UniformRangedQuantization(float* in, size_t input_size, void * struct_ptr);
 
+struct unif_quant_16* UniformRangedQuantization_16(float* in, size_t input_size, void * struct_ptr);
+
 float* UniformRangedDequantization(struct unif_quant* in, size_t input_size, float * out);
+
+float* UniformRangedDequantization_16(struct unif_quant_16* in, size_t input_size, float * out);
 
 #endif
 

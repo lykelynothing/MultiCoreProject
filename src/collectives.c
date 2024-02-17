@@ -20,6 +20,7 @@ void DequantizeVector();
 int RecursiveHalvingSend();
 int RecursiveHalvingSendHomomorphic();
 int RingAllreduce();
+int RingAllreduce_16();
 void * Allocate();
 void Free();
 
@@ -53,7 +54,6 @@ int MPI_Allreduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype da
   MPI_Comm_rank(comm, &my_rank);
   MPI_Comm_size(comm, &comm_sz);
 
-  //TODO: need to add rcv buff that will store final sum in RecursiveHalvingSend
   switch (env_var[1]){
     case 0:
       if (env_var[0] != 3)
@@ -62,7 +62,10 @@ int MPI_Allreduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype da
         RecursiveHalvingSendHomomorphic(my_rank, comm_sz, count, (float *) sendbuf, (float *) recvbuf);
       break;
     case 1:
-      RingAllreduce(my_rank, comm_sz, (float*) sendbuf, count, (float*) recvbuf);
+      if (BITS==16)
+        RingAllreduce_16(my_rank, comm_sz, (float*) sendbuf, count, (float*) recvbuf);
+      else 
+        RingAllreduce(my_rank, comm_sz, (float*) sendbuf, count, (float*) recvbuf);
       break;
     default:
       PMPI_Allreduce(sendbuf, recvbuf, count, datatype, op, comm);
@@ -77,7 +80,6 @@ int MPI_Allreduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype da
  * quantized data, dequantize it, sum it with its own vector, 
  * requantize the partial sum vector and send it to the next process.
  * For now assumes comm_sz is always divisible by 2. */
-// TODO: Free stuff
 int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, int algo, float * my_numbers, float * recv_buf) { 
   int remaining = comm_sz;
   int half;
@@ -113,7 +115,6 @@ int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, int algo, float * my
     }
     remaining = remaining / 2;
   }
-  //TODO: BROADCAST RESULT!
   if (my_rank == 0){
     for (int i = 0; i < dim; i++)
       recv_buf[i] = my_numbers[i];
@@ -158,7 +159,6 @@ int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count, float *
 
   tmp = malloc(sizeof(float) * count);
   tmp = HomomorphicDequantization(struct_ptr->vec, struct_ptr->min, struct_ptr->max, comm_sz, count, 1, tmp);
-  // TODO: figure out why we need to copy from tmp to recvbuf and not directly store in recvbuf
   for (int i = 0; i < count; i++)
     recvbuf[i] = tmp[i];
 
@@ -176,8 +176,7 @@ int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count, float *
  *    each one of tose parts is sent to a different process (like an MPI_SCATTER), but
  *    a reduction is done by each process while is recieving those parts of the vector 
  * -  in the second part the reduced part of the vectors are then gathered by all processes
- *    in what is effectively a ring MPI_Allgather
- * TODO: This implementation of the ring allreduce uses only an Homomorphic Quantization scheme, other quant algo needs to be added.*/
+ *    in what is effectively a ring MPI_Allgather*/
 int RingAllreduce(int my_rank, int comm_sz, float* data, size_t dim, float* output_ptr) {
   void * void_ptr = Allocate(3, dim);
 
@@ -213,11 +212,8 @@ int RingAllreduce(int my_rank, int comm_sz, float* data, size_t dim, float* outp
   MPI_Status recv_status;
   MPI_Request recv_req;
 
-  MPI_Datatype datatype;
-  if (BITS == 8)
-    datatype = MPI_UINT8_T;
-  else if (BITS == 16)
-    datatype = MPI_UINT16_T;
+  MPI_Datatype datatype =MPI_UINT8_T;
+  datatype = MPI_UINT16_T;
   
   //Scattering of the array. In each iteration each process recieves from its "recv_from"
   //process a chunk of the scattered array. 
@@ -252,7 +248,6 @@ int RingAllreduce(int my_rank, int comm_sz, float* data, size_t dim, float* outp
     MPI_Sendrecv(segment_send, segment_sizes[send_chunk], datatype, send_to, 0, segment_recv, segment_sizes[recv_chunk], datatype, recv_from, 0, MPI_COMM_WORLD, &recv_status);
   }
   
-//TODO: qua sarebbe da cambiare il pezzo
   float * temp = malloc(sizeof(float) * dim);
   temp = HomomorphicDequantization(output, quantized_data->min, quantized_data->max, comm_sz, dim, 1, temp);
   for(int i=0; i<dim; i++){
@@ -269,12 +264,66 @@ int RingAllreduce(int my_rank, int comm_sz, float* data, size_t dim, float* outp
   return MPI_SUCCESS;
 }
 
+int RingAllreduce_16(int my_rank, int comm_sz, float* data, size_t dim, float* output_ptr) {
+  void * void_ptr = Allocate(3, dim);
+
+  HomomorphicQuantization_16(data, dim, MPI_COMM_WORLD, void_ptr);
+  struct unif_quant_16* quantized_data = (struct unif_quant_16 *) void_ptr;
+  size_t size = dim / comm_sz;
+  size_t remainder = dim % size;
+  size_t* segment_sizes = malloc(comm_sz * sizeof(size_t));
+  for (int i = 0; i < comm_sz; i++)
+    segment_sizes[i] = (i < remainder) ? size + 1 : size;
+  size_t* segment_ends = malloc(comm_sz * sizeof(size_t));
+  segment_ends[0] = segment_sizes[0];
+  for (int i = 1; i < comm_sz; i++)
+    segment_ends[i] = segment_sizes[i] + segment_ends[i-1];
+  uint16_t* output = malloc(dim * sizeof(uint16_t));
+  for (int i = 0; i < dim; i++)
+    output[i] = quantized_data->vec[i];
+  uint16_t* buffer = malloc(segment_sizes[0] * sizeof(uint16_t));
+  const size_t recv_from = (my_rank - 1 + comm_sz) % comm_sz;
+  const size_t send_to = (my_rank + 1) % comm_sz;
+  MPI_Status recv_status;
+  MPI_Request recv_req;
+  MPI_Datatype datatype = MPI_UINT16_T;
+  for (int i = 0; i < comm_sz - 1; i++) {
+    int recv_chunk = (my_rank - i - 1 + comm_sz) % comm_sz;
+    int send_chunk = (my_rank - i + comm_sz) % comm_sz;
+    uint16_t* segment_send = &(output[segment_ends[send_chunk] - segment_sizes[send_chunk]]);
+    MPI_Irecv(buffer, segment_sizes[recv_chunk], datatype, recv_from, 0, MPI_COMM_WORLD, &recv_req);
+    MPI_Send(segment_send, segment_sizes[send_chunk], datatype, send_to, 0, MPI_COMM_WORLD);
+    uint16_t* segment_update = &(output[segment_ends[recv_chunk] - segment_sizes[recv_chunk]]);
+    MPI_Wait(&recv_req, &recv_status);
+    for(size_t i = 0; i < segment_sizes[recv_chunk]; i++)
+      segment_update[i] += buffer[i];
+  }
+  for (size_t i = 0; i < comm_sz - 1; ++i) {
+    int send_chunk = (my_rank - i + 1 + comm_sz) % comm_sz;
+    int recv_chunk = (my_rank - i + comm_sz) % comm_sz;
+    uint16_t* segment_send = &(output[segment_ends[send_chunk] - segment_sizes[send_chunk]]);
+    uint16_t* segment_recv = &(output[segment_ends[recv_chunk] - segment_sizes[recv_chunk]]);
+    MPI_Sendrecv(segment_send, segment_sizes[send_chunk], datatype, send_to, 0, segment_recv, segment_sizes[recv_chunk], datatype, recv_from, 0, MPI_COMM_WORLD, &recv_status);
+  }
+  float * temp = malloc(sizeof(float) * dim);
+  temp = HomomorphicDequantization_16(output, quantized_data->min, quantized_data->max, comm_sz, dim, 1, temp);
+  for(int i=0; i<dim; i++){
+    output_ptr[i] = temp[i];
+  }
+  free(temp);
+  free(buffer);
+  free(segment_sizes);
+  free(segment_ends);
+  free(quantized_data->vec);
+  free(quantized_data);
+  return MPI_SUCCESS;
+}
 /* Function takes float vector and quantizes it according to
  * the kind of algorithm specified by int algo. Struct in arguments
  * will contain the quantized array */
 void * Quantize(float * sendbuf, int count, int algo, void * struct_ptr){ 
 
-
+  if (BITS==8)
   switch(algo){
     case 0:
       LloydMaxQuantizer(sendbuf, count, struct_ptr);
@@ -299,6 +348,31 @@ void * Quantize(float * sendbuf, int count, int algo, void * struct_ptr){
     default:
       printf("ERROR!! Quant algo not valid (quantize call)\n");
       return NULL;
+  } else if (BITS==16)
+  switch(algo){
+    case 0:
+      LloydMaxQuantizer_16(sendbuf, count, struct_ptr);
+      break;
+    case 1:
+      char *string_type_env = getenv("NON_LINEAR_TYPE");
+      int type;
+      if (string_type_env != NULL)
+        type = atoi(string_type_env);
+      else {
+        printf("\nERROR : Couldn't find a type env_var, aborting...\n\n");
+        return NULL;
+      }
+      struct_ptr = NonLinearQuantization_16(sendbuf, count, type);
+      break;
+    case 2:
+      UniformRangedQuantization_16(sendbuf, count, struct_ptr);
+      break;
+    case 3:
+      HomomorphicQuantization_16(sendbuf, count, MPI_COMM_WORLD, struct_ptr);
+      break;
+    default:
+      printf("ERROR!! Quant algo not valid (quantize call)\n");
+      return NULL;
   }
   
   return struct_ptr;
@@ -308,19 +382,37 @@ void * Quantize(float * sendbuf, int count, int algo, void * struct_ptr){
 /* Writes into dequantized_1 the quantized array present into 
  * struct_ptr1.vec */
 void DequantizeVector(void * struct_ptr, float * dequantized, int algo, int dim){
+  if (BITS==8)
   switch (algo){
     case 0:
       struct lloyd_max_quant *str0 = (struct lloyd_max_quant *)struct_ptr;
       LloydMaxDequantizer(str0, dim, dequantized);
       break;
     case 1:
-    // TODO: Non linear still allocates memory
       struct non_linear_quant *str1 = (struct non_linear_quant *)struct_ptr;
       dequantized = NonLinearDequantization(str1, dim);
       break;
     case 2:
       struct unif_quant *str2 = (struct unif_quant *)struct_ptr;
       UniformRangedDequantization(str2, dim, dequantized);
+      break;
+    default:
+      printf("ERROR!! Quant algo not valid (dequantize call)\n");
+      break;
+  }
+  else if(BITS==16)
+  switch (algo){
+    case 0:
+      struct lloyd_max_quant_16 *str0 = (struct lloyd_max_quant_16 *)struct_ptr;
+      LloydMaxDequantizer_16(str0, dim, dequantized);
+      break;
+    case 1:
+      struct non_linear_quant_16 *str1 = (struct non_linear_quant_16 *)struct_ptr;
+      dequantized = NonLinearDequantization_16(str1, dim);
+      break;
+    case 2:
+      struct unif_quant_16 *str2 = (struct unif_quant_16 *)struct_ptr;
+      UniformRangedDequantization_16(str2, dim, dequantized);
       break;
     default:
       printf("ERROR!! Quant algo not valid (dequantize call)\n");
@@ -334,43 +426,73 @@ void DequantizeVector(void * struct_ptr, float * dequantized, int algo, int dim)
  * quantized vector (uint8). Returns pointer to received struct */
 // Receives an already allocated struct
 void * Receive(int algo, int dim, int source, void * void_ptr){
-  MPI_Datatype * type_ptr;
-
+  if (BITS==8)
   switch(algo){
   // lloyd also contains codebook
   case 0:
     struct lloyd_max_quant * str_ptr1 = (struct lloyd_max_quant *) void_ptr;
-    // Fix allocation here as well
-    MPI_Datatype MPI_Lloyd = LloydMaxQuantType();
-    type_ptr = &MPI_Lloyd;
-    MPI_Recv(str_ptr1, 1, MPI_Lloyd, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    
+    MPI_Recv(&str_ptr1->min, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Recv(&str_ptr1->max, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     MPI_Recv(str_ptr1->vec, dim, MPI_UINT8_T, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     MPI_Recv(str_ptr1->codebook, REPR_RANGE, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    MPI_Type_free(type_ptr);
     break;
   case 1:
-    // first create struct
-    struct non_linear_quant * str_ptr2 = malloc(sizeof(struct non_linear_quant));
-    str_ptr2->vec = malloc(sizeof(uint8_t) * dim);
-    void_ptr = str_ptr2;
-    // then create custom mpi datatype
-    MPI_Datatype MPI_NonLin = NonLinearQuantType();
-    type_ptr = &MPI_NonLin;
-    MPI_Recv(str_ptr2, 1, MPI_NonLin, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    struct non_linear_quant * str_ptr2 = (struct non_linear_quant*) void_ptr;
+
+    MPI_Recv(&str_ptr2 -> min, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Recv(&str_ptr2 -> max, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     MPI_Recv(str_ptr2 -> vec, dim, MPI_UINT8_T, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    MPI_Type_free(type_ptr);
+    MPI_Recv(&str_ptr2 -> type, dim, MPI_INT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     break; 
   case 2:
-  case 3:
     struct unif_quant * str_ptr3 = (struct unif_quant *) void_ptr;
 
-    MPI_Datatype MPI_Unif = UnifQuantType();
-    type_ptr = &MPI_Unif;
-
-    MPI_Recv(str_ptr3, 1, MPI_Unif, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Recv(&str_ptr3->min, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Recv(&str_ptr3->max, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     MPI_Recv(str_ptr3->vec, dim, MPI_UINT8_T, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    break;
+  case 3:
+    struct unif_quant * str_ptr4 = (struct unif_quant *) void_ptr;
 
-    MPI_Type_free(type_ptr);
+    MPI_Recv(&str_ptr4->min, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Recv(&str_ptr4->max, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Recv(str_ptr4->vec, dim, MPI_UINT8_T, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    break;
+  default:
+    printf("ERROR!! Quant algo not valid\n");
+    break;
+  }else if (BITS==16)
+  switch(algo){
+  case 0:
+    struct lloyd_max_quant_16 * str_ptr1 = (struct lloyd_max_quant_16 *) void_ptr;
+    
+    MPI_Recv(&str_ptr1->min, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Recv(&str_ptr1->max, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Recv(str_ptr1->vec, dim, MPI_UINT16_T, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Recv(str_ptr1->codebook, REPR_RANGE, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    break;
+  case 1:
+    struct non_linear_quant_16 * str_ptr2 = (struct non_linear_quant_16*) void_ptr;
+
+    MPI_Recv(&str_ptr2 -> min, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Recv(&str_ptr2 -> max, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Recv(str_ptr2 -> vec, dim, MPI_UINT16_T, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Recv(&str_ptr2 -> type, dim, MPI_INT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    break; 
+  case 2:
+    struct unif_quant_16 * str_ptr3 = (struct unif_quant_16 *) void_ptr;
+
+    MPI_Recv(&str_ptr3->min, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Recv(&str_ptr3->max, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Recv(str_ptr3->vec, dim, MPI_UINT16_T, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    break;
+  case 3:
+    struct unif_quant_16 * str_ptr4 = (struct unif_quant_16 *) void_ptr;
+
+    MPI_Recv(&str_ptr4->min, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Recv(&str_ptr4->max, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Recv(str_ptr4->vec, dim, MPI_UINT16_T, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     break;
   default:
     printf("ERROR!! Quant algo not valid\n");
@@ -384,46 +506,64 @@ void * Receive(int algo, int dim, int source, void * void_ptr){
 /* Sends the struct and its vec field (and codebook with LLOYD) to dest.
  * Remeber to deallocate space outside of function. */
 int Send(void * struct_ptr, int algo, int dim, int dest){
-  MPI_Datatype * type_ptr;
-
+  if (BITS==8)
   switch(algo){
-    // lloyd also contains codebook
     case 0:
       struct lloyd_max_quant * str_ptr1 = (struct lloyd_max_quant *) struct_ptr;
-      MPI_Datatype MPI_Lloyd = LloydMaxQuantType();
-      type_ptr = &MPI_Lloyd;
-      MPI_Send(str_ptr1, 1, MPI_Lloyd, dest, 0, MPI_COMM_WORLD);
+      MPI_Send(&str_ptr1->min, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+      MPI_Send(&str_ptr1->max, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
       MPI_Send(str_ptr1->vec, dim, MPI_UINT8_T, dest, 0, MPI_COMM_WORLD);
       MPI_Send(str_ptr1->codebook, REPR_RANGE, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
-      MPI_Type_free(type_ptr);
       break;
-
     case 1:
-      // first create struct
-      struct non_linear_quant * str_ptr2 = malloc(sizeof(struct non_linear_quant));
-      // then create custom mpi datatype
-      MPI_Datatype MPI_NonLin = NonLinearQuantType();
-      type_ptr = &MPI_NonLin;
-      MPI_Send(str_ptr2, 1, MPI_NonLin, dest, 0, MPI_COMM_WORLD);
+      struct non_linear_quant * str_ptr2 = (struct non_linear_quant*) struct_ptr;
+      MPI_Send(&str_ptr2 -> min, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+      MPI_Send(&str_ptr2 -> max, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
       MPI_Send(str_ptr2 -> vec, dim, MPI_UINT8_T, dest, 0, MPI_COMM_WORLD);
-      MPI_Type_free(type_ptr);
+      MPI_Send(&str_ptr2 -> type, 1, MPI_INT, dest, 0, MPI_COMM_WORLD);
       break;
     case 2:
       struct unif_quant * str_ptr3 = (struct unif_quant *) struct_ptr;
-
-      MPI_Datatype MPI_Unif = UnifQuantType();
-      type_ptr = &MPI_Unif;
-      MPI_Send(str_ptr3, 1, MPI_Unif, dest, 0, MPI_COMM_WORLD);
+      MPI_Send(&str_ptr3->min, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+      MPI_Send(&str_ptr3->max, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
       MPI_Send(str_ptr3->vec, dim, MPI_UINT8_T, dest, 0, MPI_COMM_WORLD);
-      MPI_Type_free(type_ptr);
       break;
     case 3:
       struct unif_quant * str_ptr4 = (struct unif_quant *) struct_ptr;
-      MPI_Datatype MPI_Unif1 = UnifQuantType();
-      type_ptr = &MPI_Unif1;
-      MPI_Send(str_ptr4, 1, MPI_Unif, dest, 0, MPI_COMM_WORLD);
+      MPI_Send(&str_ptr4->min, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+      MPI_Send(&str_ptr4->max, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
       MPI_Send(str_ptr4->vec, dim, MPI_UINT8_T, dest, 0, MPI_COMM_WORLD);
-      MPI_Type_free(type_ptr);
+      break;
+    default:
+      printf("ERROR!! Quant algo not valid (send_call)\n");
+      break;
+  } else if (BITS==16)
+  switch(algo){
+    case 0:
+      struct lloyd_max_quant_16 * str_ptr1 = (struct lloyd_max_quant_16 *) struct_ptr;
+      MPI_Send(&str_ptr1->min, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+      MPI_Send(&str_ptr1->max, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+      MPI_Send(str_ptr1->vec, dim, MPI_UINT16_T, dest, 0, MPI_COMM_WORLD);
+      MPI_Send(str_ptr1->codebook, REPR_RANGE, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+      break;
+    case 1:
+      struct non_linear_quant_16 * str_ptr2 = (struct non_linear_quant_16 *) struct_ptr;
+      MPI_Send(&str_ptr2 -> min, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+      MPI_Send(&str_ptr2 -> max, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+      MPI_Send(str_ptr2 -> vec, dim, MPI_UINT16_T, dest, 0, MPI_COMM_WORLD);
+      MPI_Send(&str_ptr2 -> type, 1, MPI_INT, dest, 0, MPI_COMM_WORLD);
+      break;
+    case 2:
+      struct unif_quant_16 * str_ptr3 = (struct unif_quant_16 *) struct_ptr;
+      MPI_Send(&str_ptr3->min, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+      MPI_Send(&str_ptr3->max, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+      MPI_Send(str_ptr3->vec, dim, MPI_UINT16_T, dest, 0, MPI_COMM_WORLD);
+      break;
+    case 3:
+      struct unif_quant_16 * str_ptr4 = (struct unif_quant_16 *) struct_ptr;
+      MPI_Send(&str_ptr4->min, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+      MPI_Send(&str_ptr4->max, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+      MPI_Send(str_ptr4->vec, dim, MPI_UINT16_T, dest, 0, MPI_COMM_WORLD);
       break;
     default:
       printf("ERROR!! Quant algo not valid (send_call)\n");
@@ -435,6 +575,7 @@ int Send(void * struct_ptr, int algo, int dim, int dest){
 
 void * Allocate(int algo, int count){
   void * void_ptr;
+  if (BITS==8)
   switch (algo){
     case 0:
       void_ptr = malloc(sizeof(struct lloyd_max_quant));
@@ -453,26 +594,73 @@ void * Allocate(int algo, int count){
       struct unif_quant * tmp_ptr4 = (struct unif_quant *) void_ptr;
       tmp_ptr4 -> vec = malloc(sizeof(uint8_t) * count);
   }
+  else if (BITS == 16)
+  switch (algo){
+    case 0:
+      void_ptr = malloc(sizeof(struct lloyd_max_quant_16));
+      struct lloyd_max_quant_16 * tmp_ptr1 = (struct lloyd_max_quant_16 *) void_ptr;
+      tmp_ptr1 -> vec = malloc(sizeof(uint16_t) * count);
+    case 1:
+      void_ptr = malloc(sizeof(struct non_linear_quant_16));
+      struct non_linear_quant_16 * tmp_ptr2 = (struct non_linear_quant_16 *) void_ptr;
+      tmp_ptr2 -> vec = malloc(sizeof(uint16_t) * count);
+    case 2:
+      void_ptr = malloc(sizeof(struct unif_quant_16));
+      struct unif_quant_16 * tmp_ptr3 = (struct unif_quant_16 *) void_ptr;
+      tmp_ptr3 -> vec = malloc(sizeof(uint16_t) * count);
+    case 3:
+      void_ptr = malloc(sizeof(struct unif_quant_16));
+      struct unif_quant_16* tmp_ptr4 = (struct unif_quant_16 *) void_ptr;
+      tmp_ptr4 -> vec = malloc(sizeof(uint16_t) * count);
+  }
   return void_ptr;
 }
 
 void Free(int algo, void * void_ptr){
+  if(BITS==8)
   switch (algo){
     case 0:
       struct lloyd_max_quant * tmp_ptr1 = (struct lloyd_max_quant *) void_ptr;
       free(tmp_ptr1->vec);
       free(tmp_ptr1);
+      break;
     case 1:
       struct non_linear_quant * tmp_ptr2 = (struct non_linear_quant *) void_ptr;
       free(tmp_ptr2->vec);
       free(tmp_ptr2);
+      break;
     case 2:
       struct unif_quant * tmp_ptr3 = (struct unif_quant *) void_ptr;
       free(tmp_ptr3->vec);
       free(tmp_ptr3);
+      break;
     case 3:
       struct unif_quant * tmp_ptr4 = (struct unif_quant *) void_ptr;
       free(tmp_ptr4->vec);
       free(tmp_ptr4);
+      break;
+  }
+  else if (BITS==16)
+  switch (algo){
+    case 0:
+      struct lloyd_max_quant_16 * tmp_ptr1 = (struct lloyd_max_quant_16 *) void_ptr;
+      free(tmp_ptr1->vec);
+      free(tmp_ptr1);
+      break;
+    case 1:
+      struct non_linear_quant_16 * tmp_ptr2 = (struct non_linear_quant_16 *) void_ptr;
+      free(tmp_ptr2->vec);
+      free(tmp_ptr2);
+      break;
+    case 2:
+      struct unif_quant_16 * tmp_ptr3 = (struct unif_quant_16 *) void_ptr;
+      free(tmp_ptr3->vec);
+      free(tmp_ptr3);
+      break;
+    case 3:
+      struct unif_quant_16 * tmp_ptr4 = (struct unif_quant_16 *) void_ptr;
+      free(tmp_ptr4->vec);
+      free(tmp_ptr4);
+      break;
   }
 }

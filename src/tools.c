@@ -12,68 +12,6 @@
 int BITS;
 int REPR_RANGE;
 
-MPI_Datatype UnifQuantType(){
-  MPI_Datatype MPI_Unif_quant;
-  MPI_Datatype types[3] = {MPI_FLOAT, MPI_FLOAT, MPI_UINT8_T};
-  int block_lengths[3] = {1, 1, 1};  
-  MPI_Aint offsets[3];
-
-	MPI_Get_address(&(((struct unif_quant *)0)->min), &offsets[0]);
-	MPI_Get_address(&(((struct unif_quant *)0)->max), &offsets[1]);
-	MPI_Get_address(&(((struct unif_quant *)0)->vec), &offsets[2]);
-
-	for (int i = 0; i < 3; i++)
-		offsets[i] -= offsets[0];
-
-    MPI_Type_create_struct(3, block_lengths, offsets, types, &MPI_Unif_quant);
-    MPI_Type_commit(&MPI_Unif_quant);
-
-    return MPI_Unif_quant;
-}
-
-
-MPI_Datatype NonLinearQuantType(){
-    MPI_Datatype MPI_Non_linear_quant;
-    MPI_Datatype types[4] = {MPI_FLOAT, MPI_FLOAT, MPI_INT, MPI_UINT8_T};
-    int block_lengths[4] = {1, 1, 1, 1}; 
-    MPI_Aint offsets[4];
-    
-	MPI_Get_address(&(((struct non_linear_quant *)0)->min), &offsets[0]);
-	MPI_Get_address(&(((struct non_linear_quant *)0)->max), &offsets[1]);
-	MPI_Get_address(&(((struct non_linear_quant *)0)->type), &offsets[2]);
-	MPI_Get_address(&(((struct non_linear_quant *)0)->vec), &offsets[3]);
-
-	for (int i = 0; i < 4; i++)
-		offsets[i] -= offsets[0];
-
-    MPI_Type_create_struct(4, block_lengths, offsets, types, &MPI_Non_linear_quant);
-    MPI_Type_commit(&MPI_Non_linear_quant);
-
-    return MPI_Non_linear_quant;
-}
-
-
-MPI_Datatype LloydMaxQuantType(){
-    MPI_Datatype MPI_Lloyd_max_quant;
-    MPI_Datatype types[4] = {MPI_FLOAT, MPI_FLOAT, MPI_FLOAT, MPI_UINT8_T};
-    int block_lengths[4] = {1, 1, 1, REPR_RANGE};
-    MPI_Aint offsets[4];
-
-	MPI_Get_address(&(((struct lloyd_max_quant *)0)-> min), &offsets[0]);
-	MPI_Get_address(&(((struct lloyd_max_quant *)0)-> max), &offsets[1]);
-	MPI_Get_address(&(((struct lloyd_max_quant *)0)-> codebook), &offsets[2]);
-	MPI_Get_address(&(((struct lloyd_max_quant *)0)-> vec), &offsets[3]);
-
-	for (int i = 0; i < 4; i++)
-		offsets[i] -= offsets[0];
-
-    MPI_Type_create_struct(4, block_lengths, offsets, types, &MPI_Lloyd_max_quant);
-    MPI_Type_commit(&MPI_Lloyd_max_quant);
-
-    return MPI_Lloyd_max_quant;
-}
-
-
 /* Function used to get environmental variables that will be used for the choice of 
  * quantization algorithm, quantization precision (number of bits used) and type of 
  * reduction. */
@@ -200,7 +138,7 @@ float sign(float x){
 
 //MeanSquaredError between two float arrays
 float MeanSquaredError(float* v1, float* v2, size_t lenght){
-  float out=0;
+  float out = 0;
   
   #pragma omp parallel for reduction( + : out)
 	for(int i = 0; i<lenght; i++)
@@ -211,17 +149,20 @@ float MeanSquaredError(float* v1, float* v2, size_t lenght){
 	return out;
 }
 
+//MSE but each value it's normalized by its dimension
 float NormalizedMSE(float*v1, float* v2, size_t lenght){
-	float out = MeanSquaredError(v1,v2, lenght);
-	float min, max, range;
-	MinMax(v1, lenght, &min, &max, 0);
-	range = max - min;
-	out = out/range;
+  float out = 0;
+
+  #pragma omp parallel for reduction( + : out)
+	for(int i = 0; i<lenght; i++)
+		out+= (v1[i]-v2[i])*(v1[i]-v2[i])/(v1[i]*v1[i]);
+
+	out = out/(float)lenght;
 	return out;
 }
 
 
-void ProcessPrinter(void* obj, size_t lenght, int my_rank, int comm_sz, MPI_Comm comm, TYPE t){
+void ProcessPrinter(void* obj, size_t lenght, int my_rank, int comm_sz, TYPE t){
   switch(t){
     case INT:
       int* intptr = (int*) obj;
@@ -233,7 +174,7 @@ void ProcessPrinter(void* obj, size_t lenght, int my_rank, int comm_sz, MPI_Comm
           printf("\n");
         }
         if(comm_sz != 1)
-          MPI_Barrier(comm);
+          MPI_Barrier(MPI_COMM_WORLD);
       }
       break;
 
@@ -247,7 +188,7 @@ void ProcessPrinter(void* obj, size_t lenght, int my_rank, int comm_sz, MPI_Comm
           printf("\n");
         }
         if(comm_sz != 1)
-          MPI_Barrier(comm);
+          MPI_Barrier(MPI_COMM_WORLD);
       }
       break;
 
@@ -261,7 +202,7 @@ void ProcessPrinter(void* obj, size_t lenght, int my_rank, int comm_sz, MPI_Comm
           printf("\n");
         }
         if(comm_sz != 1)
-          MPI_Barrier(comm);
+          MPI_Barrier(MPI_COMM_WORLD);
       }
       break;
     
@@ -275,7 +216,7 @@ void ProcessPrinter(void* obj, size_t lenght, int my_rank, int comm_sz, MPI_Comm
           printf("\n");
         }
         if(comm_sz != 1)
-          MPI_Barrier(comm);
+          MPI_Barrier(MPI_COMM_WORLD);
       }
       break;
 

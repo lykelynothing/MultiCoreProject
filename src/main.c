@@ -3,10 +3,6 @@
 #include <time.h>
 #include <mpi.h>
 
-#include "homomorphic_quantizer.h"
-#include "lloyd_max_quantizer.h"
-#include "non_linear_quantizer.h"
-#include "uniform_quantizer.h"
 #include "tools.h"
 #include "collectives.h"
 
@@ -68,7 +64,7 @@ int main(int argc, char** argv){
   MPI_Barrier(MPI_COMM_WORLD);
   ProcessPrinter(out, dim, my_rank, comm_sz, MPI_COMM_WORLD, FLOAT);
 
-  /*float* dequantized = HomomorphicDequantization(q->vec, q->min, q->max, comm_sz, dim, 0);
+  float* dequantized = HomomorphicDequantization(q->vec, q->min, q->max, comm_sz, dim, 0);
   if(my_rank==0) printf("\nDEQUANTIZED AFTER RING ALLRED VECTOR\n");
   MPI_Barrier(MPI_COMM_WORLD);
   ProcessPrinter(dequantized, dim, my_rank, comm_sz, MPI_COMM_WORLD, FLOAT);

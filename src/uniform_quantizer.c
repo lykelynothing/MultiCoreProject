@@ -53,3 +53,33 @@ float* UniformRangedDequantization(struct unif_quant* in, size_t input_size, flo
 	return out;
 }
 
+//SAME FOR UINT16
+struct unif_quant_16* UniformRangedQuantization_16(float* in, size_t input_size, void * struct_ptr){
+	struct unif_quant_16* out = (struct unif_quant_16*) struct_ptr;
+	MinMax(in, input_size, &(out->min), &(out->max), 0);
+
+	float range = out->max - out->min;
+	float min = out->min;
+  float step = (REPR_RANGE - 1) / range;
+	#pragma omp parallel for
+	for(int i = 0; i < input_size; i++){
+		float quant = round((in[i] - min) * step);
+		out->vec[i] = (uint16_t) quant;
+	}
+
+	return out;
+}
+
+float* UniformRangedDequantization_16(struct unif_quant_16* in, size_t input_size, float * out){
+	float max = in->max;
+	float min = in->min;
+	float range = max - min;
+	float step = range / (REPR_RANGE - 1);
+
+	#pragma omp parallel for
+	for(int i = 0; i < input_size; i++)
+		out[i] = ((float)in->vec[i]) * step + min;
+
+	return out;
+}
+
