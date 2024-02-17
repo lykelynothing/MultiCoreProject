@@ -168,7 +168,6 @@ int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count, float *
     MPI_Barrier(MPI_COMM_WORLD);
   }
 
-  printf("Each element has been added %d times\n", tally);
   
   MPI_Bcast(struct_ptr->vec, count, MPI_UINT8_T, 0, MPI_COMM_WORLD);
 
