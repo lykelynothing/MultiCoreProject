@@ -9,13 +9,22 @@
 
 
 int main(int argc, char** argv){
+  float lowerbound, upperbound;
   size_t dim;
 	switch(argc){
 		case 2:
 			dim = (size_t) strtol(argv[1], NULL, 10);
 			break;
+    case 4:
+			dim = (size_t) strtol(argv[1], NULL, 10);
+      lowerbound = (float) atof(argv[2]);
+      upperbound = (float) atof(argv[3]);
+      break;
 		default:
 			dim = 8;
+      lowerbound = -500.0;
+      upperbound = 500.0;
+      break;
 	}
 
   float NMSE;  
@@ -39,30 +48,31 @@ int main(int argc, char** argv){
 
   srand(time(NULL) + my_rank);
 	
-  float* in = RandFloatGenerator(dim, -500.0, 500.0);
- /* 
+  float* in = RandFloatGenerator(dim, lowerbound, upperbound); 
   if(my_rank==0) printf("\nORIGINAL VECTORS\n");
   MPI_Barrier(MPI_COMM_WORLD);
-  ProcessPrinter(in, dim, my_rank, comm_sz, MPI_COMM_WORLD, FLOAT);
- */
+  ProcessPrinter(in, dim, my_rank, comm_sz, FLOAT);
+  
 
-  /*struct unif_quant* q = HomomorphicQuantization(in, dim, MPI_COMM_WORLD); 
-  if(my_rank==0) printf("\nQUANTIZED VECTORS\n");
+  float* control = malloc(dim * sizeof(float));
+  PMPI_Allreduce(in, control, dim, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
+  if(my_rank==0) printf("\nCONTROL VECTOR\n");
   MPI_Barrier(MPI_COMM_WORLD);
-  ProcessPrinter(q->vec, dim, my_rank, comm_sz, MPI_COMM_WORLD, UINT8);
-  */
+  ProcessPrinter(control, dim, my_rank, comm_sz, FLOAT);
+  
   float* out = malloc(dim * sizeof(float));
+  
   MPI_Barrier(MPI_COMM_WORLD);
   start = MPI_Wtime();
 	MPI_Allreduce(in, out, dim, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
   end = MPI_Wtime();
   loc_elapsed = end - start;
-
   PMPI_Reduce(&loc_elapsed, &cpu_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-/*
+  
   if(my_rank==0) printf("\nALLRED VECTOR\n");
   MPI_Barrier(MPI_COMM_WORLD);
-  ProcessPrinter(out, dim, my_rank, comm_sz, MPI_COMM_WORLD, FLOAT);
+  ProcessPrinter(out, dim, my_rank, comm_sz, FLOAT);
+  /*
 
   float* dequantized = HomomorphicDequantization(q->vec, q->min, q->max, comm_sz, dim, 0);
   if(my_rank==0) printf("\nDEQUANTIZED AFTER RING ALLRED VECTOR\n");
@@ -77,15 +87,7 @@ int main(int argc, char** argv){
   */
 
 
-  float* control = malloc(dim * sizeof(float));
-  PMPI_Allreduce(in, control, dim, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
-
-
-/*  
-  if(my_rank==0) printf("\nCONTROL VECTOR\n");
-  MPI_Barrier(MPI_COMM_WORLD);
-  ProcessPrinter(control, dim, my_rank, comm_sz, MPI_COMM_WORLD, FLOAT);
-
+/*
   if (my_rank == 0) 
     printf("\nTime Elapsed : \n");
 

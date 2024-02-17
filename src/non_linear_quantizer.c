@@ -130,7 +130,7 @@ float* NormalizedSymmetricDequantization_16(uint16_t* in, size_t input_size){
 
 
  
-struct non_linear_quant* NonLinearQuantization(float* in, size_t input_size, int type){
+struct non_linear_quant* NonLinearQuantization(float* in, size_t input_size, int type, void* struct_ptr){
 	float min, max;
 	float* temp = RangeReducer(in, input_size, &min, &max);
 	
@@ -147,7 +147,7 @@ struct non_linear_quant* NonLinearQuantization(float* in, size_t input_size, int
 			return NULL;
 	}
 	
-	struct non_linear_quant* out = (struct non_linear_quant*) malloc(sizeof(struct non_linear_quant));
+	struct non_linear_quant* out = (struct non_linear_quant*) struct_ptr;
 	out->vec = NormalizedSymmetricQuantization(temp, input_size);
 	out->min = min;
 	out->max = max;
@@ -159,7 +159,7 @@ struct non_linear_quant* NonLinearQuantization(float* in, size_t input_size, int
 }
 
 
-struct non_linear_quant_16* NonLinearQuantization_16(float* in, size_t input_size, int type){
+struct non_linear_quant_16* NonLinearQuantization_16(float* in, size_t input_size, int type, void* struct_ptr){
 	float min, max;
 	float* temp = RangeReducer(in, input_size, &min, &max);
 	
@@ -176,7 +176,7 @@ struct non_linear_quant_16* NonLinearQuantization_16(float* in, size_t input_siz
 			return NULL;
 	}
 	
-	struct non_linear_quant_16* out = (struct non_linear_quant_16*) malloc(sizeof(struct non_linear_quant_16));
+	struct non_linear_quant_16* out = (struct non_linear_quant_16*) struct_ptr;
 	out->vec = NormalizedSymmetricQuantization_16(temp, input_size);
 	out->min = min;
 	out->max = max;
@@ -187,9 +187,7 @@ struct non_linear_quant_16* NonLinearQuantization_16(float* in, size_t input_siz
 	return out;
 }
 
-float* NonLinearDequantization(struct non_linear_quant* in, size_t input_size){	
-	float* out = NormalizedSymmetricDequantization(in->vec, input_size);
-	
+float* NonLinearDequantization(struct non_linear_quant* in, size_t input_size, float* out){	
   switch(in->type){
 		case 1:
 			MuLawExpander(out, input_size);
@@ -208,9 +206,7 @@ float* NonLinearDequantization(struct non_linear_quant* in, size_t input_size){
 }
 
 
-float* NonLinearDequantization_16(struct non_linear_quant_16* in, size_t input_size){	
-	float* out = NormalizedSymmetricDequantization_16(in->vec, input_size);
-	
+float* NonLinearDequantization_16(struct non_linear_quant_16* in, size_t input_size, float* out){	
   switch(in->type){
 		case 1:
 			MuLawExpander(out, input_size);

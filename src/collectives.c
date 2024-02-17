@@ -135,8 +135,19 @@ int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count, float *
   void * void_ptr = Allocate(3, count);
   HomomorphicQuantization(sendbuf, count, MPI_COMM_WORLD, void_ptr);
   struct unif_quant * struct_ptr = (struct unif_quant *) void_ptr;
+  
+  /*ProcessPrinter(struct_ptr->vec, count, my_rank, comm_sz, UINT8);
+
+  float* dequantized = malloc(count*sizeof(float));
+  dequantized = HomomorphicDequantization(struct_ptr->vec, struct_ptr->min, struct_ptr->max, comm_sz, count, 0, dequantized);
+  
+  ProcessPrinter(dequantized, count, my_rank, comm_sz, FLOAT);
+  free(dequantized);*/
+
   struct unif_quant * rcv_bf;
   float * tmp;
+
+  int tally=0;
 
   while (remaining != 1) {
     half = remaining / 2;
@@ -144,16 +155,20 @@ int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count, float *
       int source = half + my_rank;
       // receive struct 
       rcv_bf = (struct unif_quant *) Receive(2, count, source, struct_ptr);
-      for (int i = 0; i < count; i++)
-        // TODO: optimize this
+      for (int i = 0; i < count; i++){
+        if (i==0) tally++;
         struct_ptr->vec[i] = struct_ptr->vec[i] + rcv_bf->vec[i];
+      }
     } else {
       int dest = my_rank % half;
       // send struct
       Send(struct_ptr, 2, count, dest);
     }
     remaining = remaining / 2;
+    MPI_Barrier(MPI_COMM_WORLD);
   }
+
+  printf("Each element has been added %d times\n", tally);
   
   MPI_Bcast(struct_ptr->vec, count, MPI_UINT8_T, 0, MPI_COMM_WORLD);
 
@@ -337,7 +352,7 @@ void * Quantize(float * sendbuf, int count, int algo, void * struct_ptr){
         printf("\nERROR : Couldn't find a type env_var, aborting...\n\n");
         return NULL;
       }
-      struct_ptr = NonLinearQuantization(sendbuf, count, type);
+      NonLinearQuantization(sendbuf, count, type, struct_ptr);
       break;
     case 2:
       UniformRangedQuantization(sendbuf, count, struct_ptr);
@@ -362,7 +377,7 @@ void * Quantize(float * sendbuf, int count, int algo, void * struct_ptr){
         printf("\nERROR : Couldn't find a type env_var, aborting...\n\n");
         return NULL;
       }
-      struct_ptr = NonLinearQuantization_16(sendbuf, count, type);
+      NonLinearQuantization_16(sendbuf, count, type, struct_ptr);
       break;
     case 2:
       UniformRangedQuantization_16(sendbuf, count, struct_ptr);
@@ -390,7 +405,7 @@ void DequantizeVector(void * struct_ptr, float * dequantized, int algo, int dim)
       break;
     case 1:
       struct non_linear_quant *str1 = (struct non_linear_quant *)struct_ptr;
-      dequantized = NonLinearDequantization(str1, dim);
+      NonLinearDequantization(str1, dim, dequantized);
       break;
     case 2:
       struct unif_quant *str2 = (struct unif_quant *)struct_ptr;
@@ -408,7 +423,7 @@ void DequantizeVector(void * struct_ptr, float * dequantized, int algo, int dim)
       break;
     case 1:
       struct non_linear_quant_16 *str1 = (struct non_linear_quant_16 *)struct_ptr;
-      dequantized = NonLinearDequantization_16(str1, dim);
+      NonLinearDequantization_16(str1, dim, dequantized);
       break;
     case 2:
       struct unif_quant_16 *str2 = (struct unif_quant_16 *)struct_ptr;
