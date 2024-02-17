@@ -120,8 +120,8 @@ int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, int algo, float * my
       recv_buf[i] = my_numbers[i];
   }
   PMPI_Bcast(recv_buf, dim, MPI_FLOAT, 0, MPI_COMM_WORLD);
-  // idk why this breaks it
-  // Free(algo, struct_ptr);
+
+  Free(algo, struct_ptr);
   free(dequantized);
   return MPI_SUCCESS;
 }
@@ -502,7 +502,6 @@ void * Receive(int algo, int dim, int source, void * void_ptr){
   return void_ptr;
 }
 
-
 /* Sends the struct and its vec field (and codebook with LLOYD) to dest.
  * Remeber to deallocate space outside of function. */
 int Send(void * struct_ptr, int algo, int dim, int dest){
@@ -573,6 +572,9 @@ int Send(void * struct_ptr, int algo, int dim, int dest){
   return MPI_SUCCESS;
 }
 
+uint8_t * alloc;
+
+
 void * Allocate(int algo, int count){
   void * void_ptr;
   if (BITS==8)
@@ -581,14 +583,18 @@ void * Allocate(int algo, int count){
       void_ptr = malloc(sizeof(struct lloyd_max_quant));
       struct lloyd_max_quant * tmp_ptr1 = (struct lloyd_max_quant *) void_ptr;
       tmp_ptr1 -> vec = malloc(sizeof(uint8_t) * count);
+      break;
     case 1:
       void_ptr = malloc(sizeof(struct non_linear_quant));
       struct non_linear_quant * tmp_ptr2 = (struct non_linear_quant *) void_ptr;
       tmp_ptr2 -> vec = malloc(sizeof(uint8_t) * count);
+      break;
     case 2:
       void_ptr = malloc(sizeof(struct unif_quant));
       struct unif_quant * tmp_ptr3 = (struct unif_quant *) void_ptr;
       tmp_ptr3 -> vec = malloc(sizeof(uint8_t) * count);
+      alloc = tmp_ptr3->vec;
+      break;
     case 3:
       void_ptr = malloc(sizeof(struct unif_quant));
       struct unif_quant * tmp_ptr4 = (struct unif_quant *) void_ptr;
@@ -615,6 +621,7 @@ void * Allocate(int algo, int count){
   }
   return void_ptr;
 }
+
 
 void Free(int algo, void * void_ptr){
   if(BITS==8)
