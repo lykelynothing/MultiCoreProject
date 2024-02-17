@@ -334,43 +334,34 @@ void DequantizeVector(void * struct_ptr, float * dequantized, int algo, int dim)
  * quantized vector (uint8). Returns pointer to received struct */
 // Receives an already allocated struct
 void * Receive(int algo, int dim, int source, void * void_ptr){
-  MPI_Datatype * type_ptr;
 
   switch(algo){
   // lloyd also contains codebook
   case 0:
     struct lloyd_max_quant * str_ptr1 = (struct lloyd_max_quant *) void_ptr;
-    // Fix allocation here as well
-    MPI_Datatype MPI_Lloyd = LloydMaxQuantType();
-    type_ptr = &MPI_Lloyd;
-    MPI_Recv(str_ptr1, 1, MPI_Lloyd, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    
+    MPI_Recv(&str_ptr1->min, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Recv(&str_ptr1->max, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     MPI_Recv(str_ptr1->vec, dim, MPI_UINT8_T, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     MPI_Recv(str_ptr1->codebook, REPR_RANGE, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    MPI_Type_free(type_ptr);
     break;
   case 1:
-    // first create struct
-    struct non_linear_quant * str_ptr2 = malloc(sizeof(struct non_linear_quant));
-    str_ptr2->vec = malloc(sizeof(uint8_t) * dim);
-    void_ptr = str_ptr2;
-    // then create custom mpi datatype
-    MPI_Datatype MPI_NonLin = NonLinearQuantType();
-    type_ptr = &MPI_NonLin;
-    MPI_Recv(str_ptr2, 1, MPI_NonLin, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    struct non_linear_quant * str_ptr2 = (struct non_linear_quant*) void_ptr;
+    MPI_Recv(&str_ptr2 -> min, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Recv(&str_ptr2 -> max, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     MPI_Recv(str_ptr2 -> vec, dim, MPI_UINT8_T, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    MPI_Type_free(type_ptr);
     break; 
   case 2:
-  case 3:
     struct unif_quant * str_ptr3 = (struct unif_quant *) void_ptr;
-
-    MPI_Datatype MPI_Unif = UnifQuantType();
-    type_ptr = &MPI_Unif;
-
-    MPI_Recv(str_ptr3, 1, MPI_Unif, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Recv(&str_ptr3->min, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Recv(&str_ptr3->max, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     MPI_Recv(str_ptr3->vec, dim, MPI_UINT8_T, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-    MPI_Type_free(type_ptr);
+    break;
+  case 3:
+    struct unif_quant * str_ptr4 = (struct unif_quant *) void_ptr;
+    MPI_Recv(&str_ptr4->min, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Recv(&str_ptr4->max, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Recv(str_ptr4->vec, dim, MPI_UINT8_T, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     break;
   default:
     printf("ERROR!! Quant algo not valid\n");
@@ -380,48 +371,38 @@ void * Receive(int algo, int dim, int source, void * void_ptr){
   return void_ptr;
 }
 
+
 /* Sends the struct and its vec field (and codebook with LLOYD) to dest.
  * Remeber to deallocate space outside of function. */
 int Send(void * struct_ptr, int algo, int dim, int dest){
-  MPI_Datatype * type_ptr;
 
   switch(algo){
     // lloyd also contains codebook
     case 0:
       struct lloyd_max_quant * str_ptr1 = (struct lloyd_max_quant *) struct_ptr;
-      MPI_Datatype MPI_Lloyd = LloydMaxQuantType();
-      type_ptr = &MPI_Lloyd;
-      MPI_Send(str_ptr1, 1, MPI_Lloyd, dest, 0, MPI_COMM_WORLD);
+      MPI_Send(&str_ptr1->min, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+      MPI_Send(&str_ptr1->max, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
       MPI_Send(str_ptr1->vec, dim, MPI_UINT8_T, dest, 0, MPI_COMM_WORLD);
       MPI_Send(str_ptr1->codebook, REPR_RANGE, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
-      MPI_Type_free(type_ptr);
       break;
 
     case 1:
-      // first create struct
-      struct non_linear_quant * str_ptr2 = malloc(sizeof(struct non_linear_quant));
-      // then create custom mpi datatype
-      MPI_Datatype MPI_NonLin = NonLinearQuantType();
-      type_ptr = &MPI_NonLin;
-      MPI_Send(str_ptr2, 1, MPI_NonLin, dest, 0, MPI_COMM_WORLD);
-      MPI_Send(str_ptr2 -> vec, dim, MPI_UINT8_T, dest, 0, MPI_COMM_WORLD);
-      MPI_Type_free(type_ptr);
+      struct non_linear_quant * str_ptr2 = (struct non_linear_quant *) struct_ptr;
+      MPI_Send(&str_ptr2->min, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+      MPI_Send(&str_ptr2->max, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+      MPI_Send(str_ptr2->vec, dim, MPI_UINT8_T, dest, 0, MPI_COMM_WORLD);
       break;
     case 2:
       struct unif_quant * str_ptr3 = (struct unif_quant *) struct_ptr;
-      MPI_Datatype MPI_Unif = UnifQuantType();
-      type_ptr = &MPI_Unif;
-      MPI_Send(str_ptr3, 1, MPI_Unif, dest, 0, MPI_COMM_WORLD);
+      MPI_Send(&str_ptr3->min, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+      MPI_Send(&str_ptr3->max, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
       MPI_Send(str_ptr3->vec, dim, MPI_UINT8_T, dest, 0, MPI_COMM_WORLD);
-      MPI_Type_free(type_ptr);
       break;
     case 3:
       struct unif_quant * str_ptr4 = (struct unif_quant *) struct_ptr;
-      MPI_Datatype MPI_Unif1 = UnifQuantType();
-      type_ptr = &MPI_Unif1;
-      MPI_Send(str_ptr4, 1, MPI_Unif, dest, 0, MPI_COMM_WORLD);
+      MPI_Send(&str_ptr4->min, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+      MPI_Send(&str_ptr4->max, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
       MPI_Send(str_ptr4->vec, dim, MPI_UINT8_T, dest, 0, MPI_COMM_WORLD);
-      MPI_Type_free(type_ptr);
       break;
     default:
       printf("ERROR!! Quant algo not valid (send_call)\n");
@@ -430,8 +411,6 @@ int Send(void * struct_ptr, int algo, int dim, int dest){
   
   return MPI_SUCCESS;
 }
-
-uint8_t * alloc;
 
 
 void * Allocate(int algo, int count){
@@ -451,7 +430,6 @@ void * Allocate(int algo, int count){
       void_ptr = malloc(sizeof(struct unif_quant));
       struct unif_quant * tmp_ptr3 = (struct unif_quant *) void_ptr;
       tmp_ptr3 -> vec = malloc(sizeof(uint8_t) * count);
-      alloc = tmp_ptr3->vec;
       break;
     case 3:
       void_ptr = malloc(sizeof(struct unif_quant));
@@ -467,22 +445,22 @@ void Free(int algo, void * void_ptr){
   switch (algo){
     case 0:
       struct lloyd_max_quant * tmp = (struct lloyd_max_quant *) void_ptr;
-      free((uint8_t * ) alloc);
+      free(tmp->vec);
       free(tmp);
       break;
     case 1:
       struct non_linear_quant * tmp2 = (struct non_linear_quant *) void_ptr;
-      free((uint8_t * ) alloc);
+      free(tmp2->vec);
       free(tmp2);
       break;
     case 2:
       struct unif_quant * tmp3 = (struct unif_quant  *) void_ptr;
-      free((uint8_t * ) alloc);
+      free(tmp3->vec);
       free(tmp3);
       break;
     case 3:
       struct unif_quant * tmp4 = (struct unif_quant  *) void_ptr;
-      free((uint8_t *)alloc);
+      free(tmp4->vec);
       free(tmp4);
       break;
     default:

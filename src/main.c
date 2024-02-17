@@ -11,7 +11,6 @@
 #include "collectives.h"
 
 
-
 int main(int argc, char** argv){
   size_t dim;
 	switch(argc){
