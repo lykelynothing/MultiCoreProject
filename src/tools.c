@@ -164,7 +164,7 @@ float NormalizedMSE(float*v1, float* v2, size_t lenght){
 
 void ProcessPrinter(void* obj, size_t lenght, int my_rank, int comm_sz, TYPE t){
   switch(t){
-    case INT:
+    case INT: {
       int* intptr = (int*) obj;
       for(int rank = 0; rank < comm_sz; rank++){
         if (my_rank == rank){
@@ -177,8 +177,8 @@ void ProcessPrinter(void* obj, size_t lenght, int my_rank, int comm_sz, TYPE t){
           MPI_Barrier(MPI_COMM_WORLD);
       }
       break;
-
-    case FLOAT:
+    }
+    case FLOAT: {
       float* floatptr = (float*) obj;
       for(int rank = 0; rank < comm_sz; rank++){
         if (my_rank == rank){
@@ -191,8 +191,8 @@ void ProcessPrinter(void* obj, size_t lenght, int my_rank, int comm_sz, TYPE t){
           MPI_Barrier(MPI_COMM_WORLD);
       }
       break;
-
-    case UINT8:
+    }
+    case UINT8: {
       uint8_t* uint8ptr = (uint8_t*) obj;
       for(int rank = 0; rank < comm_sz; rank++){
         if (my_rank == rank){
@@ -205,8 +205,8 @@ void ProcessPrinter(void* obj, size_t lenght, int my_rank, int comm_sz, TYPE t){
           MPI_Barrier(MPI_COMM_WORLD);
       }
       break;
-    
-    case UINT16:
+    }
+    case UINT16: {
       uint16_t* uint16ptr = (uint16_t*) obj;
       for(int rank = 0; rank < comm_sz; rank++){
         if (my_rank == rank){
@@ -219,10 +219,11 @@ void ProcessPrinter(void* obj, size_t lenght, int my_rank, int comm_sz, TYPE t){
           MPI_Barrier(MPI_COMM_WORLD);
       }
       break;
-
-    default:
+    }
+    default: {
       printf("no type inserted\n");
       break;
+    }
   }
 }
 
