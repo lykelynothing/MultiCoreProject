@@ -9,21 +9,13 @@
 
 
 int main(int argc, char** argv){
-  float lowerbound, upperbound;
   size_t dim;
 	switch(argc){
 		case 2:
 			dim = (size_t) strtol(argv[1], NULL, 10);
 			break;
-    case 4:
-			dim = (size_t) strtol(argv[1], NULL, 10);
-      lowerbound = (float) atof(argv[2]);
-      upperbound = (float) atof(argv[3]);
-      break;
 		default:
-			dim = 8;
-      lowerbound = -500.0;
-      upperbound = 500.0;
+			dim = 100;
       break;
 	}
 
@@ -48,7 +40,7 @@ int main(int argc, char** argv){
 
   srand(time(NULL) + my_rank);
 	
-  float* in = RandFloatGenerator(dim, lowerbound, upperbound); 
+  float* in = RandFloatGenerator(dim, -500.0, 500); 
   if(my_rank==0) printf("\nORIGINAL VECTORS\n");
   MPI_Barrier(MPI_COMM_WORLD);
   ProcessPrinter(in, dim, my_rank, comm_sz, FLOAT);

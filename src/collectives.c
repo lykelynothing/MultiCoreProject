@@ -147,7 +147,6 @@ int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count, float *
   struct unif_quant * rcv_bf;
   float * tmp;
 
-  int tally=0;
 
   while (remaining != 1) {
     half = remaining / 2;
@@ -156,7 +155,6 @@ int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count, float *
       // receive struct 
       rcv_bf = (struct unif_quant *) Receive(2, count, source, struct_ptr);
       for (int i = 0; i < count; i++){
-        if (i==0) tally++;
         struct_ptr->vec[i] = struct_ptr->vec[i] + rcv_bf->vec[i];
       }
     } else {
@@ -226,8 +224,7 @@ int RingAllreduce(int my_rank, int comm_sz, float* data, size_t dim, float* outp
   MPI_Status recv_status;
   MPI_Request recv_req;
 
-  MPI_Datatype datatype =MPI_UINT8_T;
-  datatype = MPI_UINT16_T;
+  MPI_Datatype datatype = MPI_UINT8_T;
   
   //Scattering of the array. In each iteration each process recieves from its "recv_from"
   //process a chunk of the scattered array. 
@@ -457,7 +454,6 @@ void * Receive(int algo, int dim, int source, void * void_ptr){
     MPI_Recv(&str_ptr2 -> min, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     MPI_Recv(&str_ptr2 -> max, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     MPI_Recv(str_ptr2 -> vec, dim, MPI_UINT8_T, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    MPI_Recv(&str_ptr2 -> type, dim, MPI_INT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     break; 
   case 2:
     struct unif_quant * str_ptr3 = (struct unif_quant *) void_ptr;
@@ -492,7 +488,6 @@ void * Receive(int algo, int dim, int source, void * void_ptr){
     MPI_Recv(&str_ptr2 -> min, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     MPI_Recv(&str_ptr2 -> max, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     MPI_Recv(str_ptr2 -> vec, dim, MPI_UINT16_T, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    MPI_Recv(&str_ptr2 -> type, dim, MPI_INT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     break; 
   case 2:
     struct unif_quant_16 * str_ptr3 = (struct unif_quant_16 *) void_ptr;
