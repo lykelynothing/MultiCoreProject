@@ -38,9 +38,9 @@ int main(int argc, char** argv){
 	MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
   
   //ADJUST CORE COUNT TO THE NUMBER OF CORES OF YOUR CPU
-  //int core_count = 8;
-  //int n_threads = core_count / comm_sz;
-  //omp_set_num_threads(n_threads);
+  int core_count = 8;
+  int n_threads = core_count / comm_sz;
+  omp_set_num_threads(n_threads);
 
   if (dim < comm_sz){
     printf("ERROR!! The dimension of the array must be bigger than comm_sz\n");
@@ -62,10 +62,10 @@ int main(int argc, char** argv){
   end_v = MPI_Wtime();
   loc_elapsed_v = end_v - start_v;
   PMPI_Reduce(&loc_elapsed_v, &cpu_time_v, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-  if(my_rank==0) printf("\nCONTROL VECTOR\n");
+  /*if(my_rank==0) printf("\nCONTROL VECTOR\n");
   MPI_Barrier(MPI_COMM_WORLD);
-  //ProcessPrinter(control, dim, my_rank, comm_sz, FLOAT);
-  
+  ProcessPrinter(control, dim, my_rank, comm_sz, FLOAT);
+  */
   float* out = malloc(dim * sizeof(float));
   MPI_Barrier(MPI_COMM_WORLD);
   start_q = MPI_Wtime();
@@ -73,11 +73,22 @@ int main(int argc, char** argv){
   end_q = MPI_Wtime();
   loc_elapsed_q = end_q - start_q;
   PMPI_Reduce(&loc_elapsed_q, &cpu_time_q, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-  if(my_rank==0) printf("\nALLRED VECTOR\n");
+  /*if(my_rank==0) printf("\nALLRED VECTOR\n");
   MPI_Barrier(MPI_COMM_WORLD);
-  //ProcessPrinter(out, dim, my_rank, comm_sz, FLOAT);
-  
-  MPI_Barrier(MPI_COMM_WORLD);
+  ProcessPrinter(out, dim, my_rank, comm_sz, FLOAT);
+  */
+
+
+  //DO NOT USE THIS FOR TESTING, THIS IS FOR DEBUGGING
+  /*if (my_rank == 0){
+    float error = NormalizedMSE(out, control, dim);
+    printf("error: %f\n", error);
+    printf("quantized allreduce: %lf\n", cpu_time_q);
+    printf("vanilla allreduce: %lf\n", cpu_time_v);
+    printf("dim: %ld\n", dim);
+  }*/
+
+  //USE THIS FOR TESTING AND DO NOT PRINT ANYTHING ELSE
   if (my_rank == 0){
     float error = NormalizedMSE(out, control, dim);
     printf("error: %f\n", error);
@@ -85,8 +96,6 @@ int main(int argc, char** argv){
     printf("vanilla allreduce: %lf\n", cpu_time_v);
     printf("dim: %ld\n", dim);
   }
-  MPI_Barrier(MPI_COMM_WORLD);
-
   free(in);
   free(out);
   free(control);
