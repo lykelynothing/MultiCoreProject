@@ -136,14 +136,14 @@ int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count, float *
     if (my_rank < half) {
       int source = half + my_rank;
       // receive struct 
-      rcv_bf = (struct unif_quant *) Receive(2, count, source, struct_ptr);
+      rcv_bf = (struct unif_quant *) Receive(HOMOMORPHIC, count, source, struct_ptr);
       for (int i = 0; i < count; i++){
         struct_ptr->vec[i] = struct_ptr->vec[i] + rcv_bf->vec[i];
       }
     } else {
       int dest = my_rank % half;
       // send struct
-      Send(struct_ptr, 2, count, dest);
+      Send(struct_ptr, HOMOMORPHIC, count, dest);
     }
     remaining = remaining / 2;
     MPI_Barrier(MPI_COMM_WORLD);
@@ -625,8 +625,6 @@ void * Allocate(QUANT algo, int count){
         void_ptr = malloc(sizeof(struct unif_quant));
         struct unif_quant * tmp_ptr4 = (struct unif_quant *) void_ptr;
         tmp_ptr4 -> vec = malloc(sizeof(uint8_t) * count);
-        printf("ALLOC time out[0]: %d \n", tmp_ptr4->vec[0]);
-        printf("ALLOC time pointer : %p \n", tmp_ptr4);
         break;
       }
       default:{
