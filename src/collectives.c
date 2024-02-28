@@ -56,7 +56,7 @@ int MPI_Allreduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype da
       if (BITS==16)
         RingAllreduce_16(my_rank, comm_sz, (float*) sendbuf, count, (float*) recvbuf);
       else 
-        RingAllreduce(my_rank, comm_sz, (float*) sendbuf, count, (float**)&(recvbuf));
+        RingAllreduce(my_rank, comm_sz, (float*) sendbuf, count, (float**)&(recvbuf), quant_algo);
       break;
     }
     default:{
@@ -173,7 +173,7 @@ int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count, float *
  * -  in the second part the reduced part of the vectors are then gathered by all processes
  *    in what is effectively a ring MPI_Allgather*/
 int RingAllreduce(int my_rank, int comm_sz, float* data, size_t dim, float** output_ptr) {
-  void * void_ptr = Allocate(3, dim);
+  void * void_ptr = Allocate(algo, dim);
 
   HomomorphicQuantization(data, dim, MPI_COMM_WORLD, void_ptr);
   struct unif_quant* quantized_data = (struct unif_quant *) void_ptr;
