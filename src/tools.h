@@ -15,6 +15,19 @@ typedef enum{
   UINT16,
 }TYPE;
 
+typedef enum{
+  RING,
+  REC_HALVING,
+}SEND;
+
+typedef enum{
+  UNIFORM,
+  HOMOMORPHIC,
+  NON_LINEAR,
+  LLOYD,
+  NO_QUANT,
+}QUANT;
+
 struct unif_quant{
 	float min;
 	float max;
@@ -58,7 +71,7 @@ struct lloyd_max_quant_16{
 
 float* RandFloatGenerator(size_t lenght, float lowerbound, float upperbound);
 
-void GetEnvVariables(int* var);
+void GetEnvVariables(SEND* send_algo, QUANT* quant_algo);
 
 void MinMax(float* vec, size_t lenght, float* min, float* max, int hom_flag);
 

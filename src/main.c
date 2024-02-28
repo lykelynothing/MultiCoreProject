@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <omp.h>
 #include <mpi.h>
 
 #include "tools.h"
@@ -21,15 +22,14 @@ int main(int argc, char** argv){
     }
 	}
 
-  float error;  
+  //TIMING VANILLA NOTQUANTIZED ALLREDUCE
+  double start_v, end_v;
+  double loc_elapsed_v;
+  double cpu_time_v;
   //TIMING CUSTOM QUANTIZED ALLREDUCE
-  double start, end;
-  double loc_elapsed;
-  double cpu_time;
-  //TIMING STANDARD ALLREDUCE
-  double start_c, end_c;
-  double loc_elapsed_c;
-  double cpu_time_c;
+  double start_q, end_q;
+  double loc_elapsed_q;
+  double cpu_time_q;
 
   int my_rank, comm_sz;
   MPI_Init(NULL, NULL);
@@ -38,6 +38,11 @@ int main(int argc, char** argv){
 	MPI_Comm_size(MPI_COMM_WORLD, &comm_sz);
 	MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
   
+  //ADJUST CORE COUNT TO THE NUMBER OF CORES OF YOUR CPU
+  //int core_count = 8;
+  //int n_threads = core_count / comm_sz;
+  //omp_set_num_threads(n_threads);
+
   if (dim < comm_sz){
     printf("ERROR!! The dimension of the array must be bigger than comm_sz\n");
     MPI_Finalize();
@@ -53,37 +58,35 @@ int main(int argc, char** argv){
   
 
   float* control = malloc(dim * sizeof(float));
-  start_c = MPI_Wtime();
+  start_v = MPI_Wtime();
   PMPI_Allreduce(in, control, dim, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
-  end_c = MPI_Wtime();
-  loc_elapsed_c = end_c - start_c;
-  PMPI_Reduce(&loc_elapsed_c, &cpu_time_c, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-  //PRINTING CONTROL VECTOR
+  end_v = MPI_Wtime();
+  loc_elapsed_v = end_v - start_v;
+  PMPI_Reduce(&loc_elapsed_v, &cpu_time_v, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
   /*if(my_rank==0) printf("\nCONTROL VECTOR\n");
   MPI_Barrier(MPI_COMM_WORLD);
   ProcessPrinter(control, dim, my_rank, comm_sz, FLOAT);*/
   
   float* out = malloc(dim * sizeof(float));
   MPI_Barrier(MPI_COMM_WORLD);
-  start = MPI_Wtime();
+  start_q = MPI_Wtime();
 	MPI_Allreduce(in, out, dim, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
-  end = MPI_Wtime();
-  loc_elapsed = end - start;
-  PMPI_Reduce(&loc_elapsed, &cpu_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+  end_q = MPI_Wtime();
+  loc_elapsed_q = end_q - start_q;
+  PMPI_Reduce(&loc_elapsed_q, &cpu_time_q, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
   /*if(my_rank==0) printf("\nALLRED VECTOR\n");
   MPI_Barrier(MPI_COMM_WORLD);
   ProcessPrinter(out, dim, my_rank, comm_sz, FLOAT);*/
   
   MPI_Barrier(MPI_COMM_WORLD);
   if (my_rank == 0){
-    error = NormalizedMSE(out, control, dim);
+    float error = NormalizedMSE(out, control, dim);
     printf("error: %f\n", error);
-    printf("custom allreduce: %lf\n", cpu_time);
-    printf("vanilla allreduce: %lf\n", cpu_time_c);
+    printf("quantized allreduce: %lf\n", cpu_time_q);
+    printf("vanilla allreduce: %lf\n", cpu_time_v);
     printf("dim: %ld\n", dim);
-  } 
-
-
+  }
+  MPI_Barrier(MPI_COMM_WORLD);
 
   free(in);
   free(out);
