@@ -15,7 +15,7 @@ int REPR_RANGE;
 /* Function used to get environmental variables that will be used for the choice of 
  * quantization algorithm, quantization precision (number of bits used) and type of 
  * reduction. */
-void GetEnvVariables(int* var){
+void GetEnvVariables(SEND* send_algo, QUANT* quant_algo){
   char * quant_env_var;
   char * send_algo_var;
   char * bits_env_var;
@@ -30,29 +30,29 @@ void GetEnvVariables(int* var){
     printf("BITS_VAR: %s\n", bits_env_var);
     printf("QUANT_ALGO: %s\n", send_algo_var);
     printf("SEND_ALGO: %s\n", quant_env_var);
-    var[1] = -1;
+    *quant_algo = NO_QUANT;
     return;
   }
 
   if(strcmp(send_algo_var, "REC_HALVING") == 0)
-    var[1] = 0;
+    *quant_algo = REC_HALVING;
   else if (strcmp(send_algo_var, "RING") == 0)
-    var[1] = 1;
+    *quant_algo = RING;
   else if (strcmp(send_algo_var, "NO_QUANT") == 0)
-    var[1] = -1;
+    *quant_algo = NO_QUANT;
   else{
     printf("\nERROR!! Invalid SEND_ALGO.\n export SEND_ALGO = 1 (ring) | 0 (recursive halving) | -1 (no quantization)\n");
     return;
   }
 
   if (strcmp(quant_env_var, "LLOYD") == 0)
-    var[0] = 0;
+    *send_algo = LLOYD;
   else if (strcmp(quant_env_var, "NON_LINEAR") == 0)
-    var[0] = 1;
+    *send_algo = NON_LINEAR;
   else if (strcmp(quant_env_var, "UNIFORM") == 0)
-    var[0] = 2;
+    *send_algo = UNIFORM;
   else if (strcmp(quant_env_var, "HOMOMORPHIC") == 0)
-    var[0] = 3;
+    *send_algo = HOMOMORPHIC;
   else{
     printf("\nERROR!! Invalid QUANT_ALGO.\n export QUANT_ALGO=LLOYD|NON_LINEAR|UNFIORM\n");
     return;
@@ -164,7 +164,7 @@ float NormalizedMSE(float*v1, float* v2, size_t lenght){
 
 void ProcessPrinter(void* obj, size_t lenght, int my_rank, int comm_sz, TYPE t){
   switch(t){
-    case INT:
+    case INT: {
       int* intptr = (int*) obj;
       for(int rank = 0; rank < comm_sz; rank++){
         if (my_rank == rank){
@@ -177,8 +177,8 @@ void ProcessPrinter(void* obj, size_t lenght, int my_rank, int comm_sz, TYPE t){
           MPI_Barrier(MPI_COMM_WORLD);
       }
       break;
-
-    case FLOAT:
+    }
+    case FLOAT: {
       float* floatptr = (float*) obj;
       for(int rank = 0; rank < comm_sz; rank++){
         if (my_rank == rank){
@@ -191,8 +191,8 @@ void ProcessPrinter(void* obj, size_t lenght, int my_rank, int comm_sz, TYPE t){
           MPI_Barrier(MPI_COMM_WORLD);
       }
       break;
-
-    case UINT8:
+    }
+    case UINT8: {
       uint8_t* uint8ptr = (uint8_t*) obj;
       for(int rank = 0; rank < comm_sz; rank++){
         if (my_rank == rank){
@@ -205,8 +205,8 @@ void ProcessPrinter(void* obj, size_t lenght, int my_rank, int comm_sz, TYPE t){
           MPI_Barrier(MPI_COMM_WORLD);
       }
       break;
-    
-    case UINT16:
+    }
+    case UINT16: {
       uint16_t* uint16ptr = (uint16_t*) obj;
       for(int rank = 0; rank < comm_sz; rank++){
         if (my_rank == rank){
@@ -219,10 +219,11 @@ void ProcessPrinter(void* obj, size_t lenght, int my_rank, int comm_sz, TYPE t){
           MPI_Barrier(MPI_COMM_WORLD);
       }
       break;
-
-    default:
+    }
+    default: {
       printf("no type inserted\n");
       break;
+    }
   }
 }
 

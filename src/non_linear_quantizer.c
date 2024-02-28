@@ -135,16 +135,19 @@ struct non_linear_quant* NonLinearQuantization(float* in, size_t input_size, int
 	float* temp = RangeReducer(in, input_size, &min, &max);
 	
 	switch(type){
-		case 1:
+		case 1: {
 			MuLawCompander(temp, input_size);
 			break;
-		case 2:
+    }
+		case 2: {
 			ALawCompander(temp, input_size);
 			break;
-		default:
+    }
+		default:{
 			printf("\tERROR\t companding type not valid\n");
 			free(temp);
 			return NULL;
+    }
 	}
 	
 	struct non_linear_quant* out = (struct non_linear_quant*) struct_ptr;
@@ -164,16 +167,19 @@ struct non_linear_quant_16* NonLinearQuantization_16(float* in, size_t input_siz
 	float* temp = RangeReducer(in, input_size, &min, &max);
 	
 	switch(type){
-		case 1:
+		case 1: {
 			MuLawCompander(temp, input_size);
 			break;
-		case 2:
+    }
+		case 2: {
 			ALawCompander(temp, input_size);
 			break;
-		default:
+    }
+		default: {
 			printf("\tERROR\t companding type not valid\n");
 			free(temp);
 			return NULL;
+    }
 	}
 	
 	struct non_linear_quant_16* out = (struct non_linear_quant_16*) struct_ptr;
@@ -189,15 +195,18 @@ struct non_linear_quant_16* NonLinearQuantization_16(float* in, size_t input_siz
 
 float* NonLinearDequantization(struct non_linear_quant* in, size_t input_size, float* out){	
   switch(in->type){
-		case 1:
+		case 1: {
 			MuLawExpander(out, input_size);
 			break;
-		case 2:
+    }
+		case 2: {
 			ALawExpander(out, input_size);
 			break;
-		default:
+    }
+		default: {
 			printf("\tERROR\t companding type not valid\n");
 			return NULL;
+    }
 	}
 
 	RangeRestorer(out, input_size, in->min, in->max);
@@ -208,15 +217,18 @@ float* NonLinearDequantization(struct non_linear_quant* in, size_t input_size, f
 
 float* NonLinearDequantization_16(struct non_linear_quant_16* in, size_t input_size, float* out){	
   switch(in->type){
-		case 1:
+		case 1:{
 			MuLawExpander(out, input_size);
 			break;
-		case 2:
+    }
+		case 2: {
 			ALawExpander(out, input_size);
 			break;
-		default:
+    }
+		default: {
 			printf("\tERROR\t companding type not valid\n");
 			return NULL;
+    }
 	}
 
 	RangeRestorer(out, input_size, in->min, in->max);
