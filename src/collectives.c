@@ -56,7 +56,7 @@ int MPI_Allreduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype da
       if (BITS==16)
         RingAllreduce_16(my_rank, comm_sz, (float*) sendbuf, count, (float*) recvbuf);
       else 
-        RingAllreduce(my_rank, comm_sz, (float*) sendbuf, count, (float*) recvbuf);
+        RingAllreduce(my_rank, comm_sz, (float*) sendbuf, count, (float**)&(recvbuf));
       break;
     }
     default:{
@@ -172,7 +172,7 @@ int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count, float *
  *    a reduction is done by each process while is recieving those parts of the vector 
  * -  in the second part the reduced part of the vectors are then gathered by all processes
  *    in what is effectively a ring MPI_Allgather*/
-int RingAllreduce(int my_rank, int comm_sz, float* data, size_t dim, float* output_ptr) {
+int RingAllreduce(int my_rank, int comm_sz, float* data, size_t dim, float** output_ptr) {
   void * void_ptr = Allocate(3, dim);
 
   HomomorphicQuantization(data, dim, MPI_COMM_WORLD, void_ptr);
@@ -242,13 +242,9 @@ int RingAllreduce(int my_rank, int comm_sz, float* data, size_t dim, float* outp
     MPI_Sendrecv(segment_send, segment_sizes[send_chunk], datatype, send_to, 0, segment_recv, segment_sizes[recv_chunk], datatype, recv_from, 0, MPI_COMM_WORLD, &recv_status);
   }
   
-  float * temp = malloc(sizeof(float) * dim);
-  temp = HomomorphicDequantization(output, quantized_data->min, quantized_data->max, comm_sz, dim, 1, temp);
-  for(int i=0; i<dim; i++){
-    output_ptr[i] = temp[i];
-  }
+  *output_ptr = HomomorphicDequantization(output, quantized_data->min, quantized_data->max, comm_sz, dim, 1, *output_ptr);
+  
   //Free of temporary data
-  free(temp);
   free(buffer);
   free(segment_sizes);
   free(segment_ends);
