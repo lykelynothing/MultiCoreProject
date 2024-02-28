@@ -25,7 +25,6 @@ struct unif_quant* HomomorphicQuantization(float* input, size_t input_size, MPI_
 
   out -> min = -min_max[0];
   out -> max = min_max[1];
-  
   //make the REPR_RANGE smaller to allow for reduction additions
   int pow = 1;
   while (pow<comm_sz){
@@ -43,7 +42,7 @@ struct unif_quant* HomomorphicQuantization(float* input, size_t input_size, MPI_
 		float quant = round((input[i] - min) * step);
 		out->vec[i] = (uint8_t) quant;
 	}
-	return out;
+  return out;
 }
 
 //Same as before buf for UINT16

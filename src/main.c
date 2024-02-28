@@ -64,7 +64,7 @@ int main(int argc, char** argv){
   PMPI_Reduce(&loc_elapsed_v, &cpu_time_v, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
   if(my_rank==0) printf("\nCONTROL VECTOR\n");
   MPI_Barrier(MPI_COMM_WORLD);
-  ProcessPrinter(control, dim, my_rank, comm_sz, FLOAT);
+  //ProcessPrinter(control, dim, my_rank, comm_sz, FLOAT);
   
   float* out = malloc(dim * sizeof(float));
   MPI_Barrier(MPI_COMM_WORLD);
@@ -75,7 +75,7 @@ int main(int argc, char** argv){
   PMPI_Reduce(&loc_elapsed_q, &cpu_time_q, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
   if(my_rank==0) printf("\nALLRED VECTOR\n");
   MPI_Barrier(MPI_COMM_WORLD);
-  ProcessPrinter(out, dim, my_rank, comm_sz, FLOAT);
+  //ProcessPrinter(out, dim, my_rank, comm_sz, FLOAT);
   
   MPI_Barrier(MPI_COMM_WORLD);
   if (my_rank == 0){

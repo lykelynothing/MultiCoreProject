@@ -125,10 +125,9 @@ int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, QUANT algo, float * 
 int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count, float * sendbuf, float * recvbuf){
   int remaining = comm_sz;
   int half;
-  void * void_ptr = Allocate(3, count);
+  void * void_ptr = Allocate(HOMOMORPHIC, count);
   HomomorphicQuantization(sendbuf, count, MPI_COMM_WORLD, void_ptr);
   struct unif_quant * struct_ptr = (struct unif_quant *) void_ptr;
-  
   struct unif_quant * rcv_bf;
   float * tmp;
 
@@ -173,7 +172,7 @@ int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count, float *
  * -  in the second part the reduced part of the vectors are then gathered by all processes
  *    in what is effectively a ring MPI_Allgather*/
 int RingAllreduce(int my_rank, int comm_sz, float* data, size_t dim, float** output_ptr) {
-  void * void_ptr = Allocate(3, dim);
+  void * void_ptr = Allocate(HOMOMORPHIC, dim);
 
   HomomorphicQuantization(data, dim, MPI_COMM_WORLD, void_ptr);
   struct unif_quant* quantized_data = (struct unif_quant *) void_ptr;
@@ -255,7 +254,7 @@ int RingAllreduce(int my_rank, int comm_sz, float* data, size_t dim, float** out
 }
 
 int RingAllreduce_16(int my_rank, int comm_sz, float* data, size_t dim, float* output_ptr) {
-  void * void_ptr = Allocate(3, dim);
+  void * void_ptr = Allocate(HOMOMORPHIC, dim);
 
   HomomorphicQuantization_16(data, dim, MPI_COMM_WORLD, void_ptr);
   struct unif_quant_16* quantized_data = (struct unif_quant_16 *) void_ptr;
@@ -626,6 +625,8 @@ void * Allocate(QUANT algo, int count){
         void_ptr = malloc(sizeof(struct unif_quant));
         struct unif_quant * tmp_ptr4 = (struct unif_quant *) void_ptr;
         tmp_ptr4 -> vec = malloc(sizeof(uint8_t) * count);
+        printf("ALLOC time out[0]: %d \n", tmp_ptr4->vec[0]);
+        printf("ALLOC time pointer : %p \n", tmp_ptr4);
         break;
       }
       default:{
