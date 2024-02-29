@@ -91,11 +91,12 @@ int main(int argc, char** argv){
   //USE THIS FOR TESTING AND DO NOT PRINT ANYTHING ELSE
   if (my_rank == 0){
     float error = NormalizedMSE(out, control, dim);
-    printf("error: %f\n", error);
-    printf("quantized allreduce: %lf\n", cpu_time_q);
-    printf("vanilla allreduce: %lf\n", cpu_time_v);
-    printf("dim: %ld\n", dim);
+    printf("%f\n", error);
+    printf("%lf\n", cpu_time_q);
+    printf("%lf\n", cpu_time_v);
+    printf("%ld\n", dim);
   }
+
   free(in);
   free(out);
   free(control);

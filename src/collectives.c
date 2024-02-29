@@ -54,7 +54,7 @@ int MPI_Allreduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype da
     }
     case RING:{
       if (BITS==16)
-        RingAllreduce_16(my_rank, comm_sz, (float*) sendbuf, count, (float*) recvbuf);
+        RingAllreduce_16(my_rank, comm_sz, (float*) sendbuf, count, (float**)&(recvbuf),quant_algo);
       else 
         RingAllreduce(my_rank, comm_sz, (float*) sendbuf, count, (float**)&(recvbuf), quant_algo);
       break;
@@ -97,7 +97,7 @@ int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, QUANT algo, float * 
       // probably need to free the vector allocated by the dequantizer
       // sum my array with received dequantized one
       for (int i = 0; i < dim; i++)
-        partial_sum[i] = partial_sum[i] + dequantized[i];
+        partial_sum[i] = partial_sum[i] + dequantized[i]; 
     } else if (sent == 0) {
       int dest = my_rank % half;
       // first quantize
@@ -171,7 +171,7 @@ int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count, float *
  *    a reduction is done by each process while is recieving those parts of the vector 
  * -  in the second part the reduced part of the vectors are then gathered by all processes
  *    in what is effectively a ring MPI_Allgather*/
-int RingAllreduce(int my_rank, int comm_sz, float* data, size_t dim, float** output_ptr) {
+int RingAllreduce(int my_rank, int comm_sz, float* data, size_t dim, float** output_ptr, QUANT algo) {
   void * void_ptr = Allocate(algo, dim);
 
   HomomorphicQuantization(data, dim, MPI_COMM_WORLD, void_ptr);
@@ -253,13 +253,15 @@ int RingAllreduce(int my_rank, int comm_sz, float* data, size_t dim, float** out
   return MPI_SUCCESS;
 }
 
-int RingAllreduce_16(int my_rank, int comm_sz, float* data, size_t dim, float* output_ptr) {
-  void * void_ptr = Allocate(HOMOMORPHIC, dim);
+int RingAllreduce_16(int my_rank, int comm_sz, float* data, size_t dim, float** output_ptr, QUANT algo) {
+  void * void_ptr = Allocate(algo, dim);
 
   HomomorphicQuantization_16(data, dim, MPI_COMM_WORLD, void_ptr);
   struct unif_quant_16* quantized_data = (struct unif_quant_16 *) void_ptr;
+  
   size_t size = dim / comm_sz;
   size_t remainder = dim % size;
+  
   size_t* segment_sizes = malloc(comm_sz * sizeof(size_t));
   for (int i = 0; i < comm_sz; i++)
     segment_sizes[i] = (i < remainder) ? size + 1 : size;
@@ -267,39 +269,47 @@ int RingAllreduce_16(int my_rank, int comm_sz, float* data, size_t dim, float* o
   segment_ends[0] = segment_sizes[0];
   for (int i = 1; i < comm_sz; i++)
     segment_ends[i] = segment_sizes[i] + segment_ends[i-1];
+  
   uint16_t* output = malloc(dim * sizeof(uint16_t));
   for (int i = 0; i < dim; i++)
     output[i] = quantized_data->vec[i];
   uint16_t* buffer = malloc(segment_sizes[0] * sizeof(uint16_t));
+  
   const size_t recv_from = (my_rank - 1 + comm_sz) % comm_sz;
   const size_t send_to = (my_rank + 1) % comm_sz;
+  
   MPI_Status recv_status;
   MPI_Request recv_req;
   MPI_Datatype datatype = MPI_UINT16_T;
+  
   for (int i = 0; i < comm_sz - 1; i++) {
     int recv_chunk = (my_rank - i - 1 + comm_sz) % comm_sz;
     int send_chunk = (my_rank - i + comm_sz) % comm_sz;
+  
     uint16_t* segment_send = &(output[segment_ends[send_chunk] - segment_sizes[send_chunk]]);
+    
     MPI_Irecv(buffer, segment_sizes[recv_chunk], datatype, recv_from, 0, MPI_COMM_WORLD, &recv_req);
     MPI_Send(segment_send, segment_sizes[send_chunk], datatype, send_to, 0, MPI_COMM_WORLD);
+    
     uint16_t* segment_update = &(output[segment_ends[recv_chunk] - segment_sizes[recv_chunk]]);
+    
     MPI_Wait(&recv_req, &recv_status);
+    
     for(size_t i = 0; i < segment_sizes[recv_chunk]; i++)
       segment_update[i] += buffer[i];
   }
   for (size_t i = 0; i < comm_sz - 1; ++i) {
     int send_chunk = (my_rank - i + 1 + comm_sz) % comm_sz;
     int recv_chunk = (my_rank - i + comm_sz) % comm_sz;
+  
     uint16_t* segment_send = &(output[segment_ends[send_chunk] - segment_sizes[send_chunk]]);
     uint16_t* segment_recv = &(output[segment_ends[recv_chunk] - segment_sizes[recv_chunk]]);
+    
     MPI_Sendrecv(segment_send, segment_sizes[send_chunk], datatype, send_to, 0, segment_recv, segment_sizes[recv_chunk], datatype, recv_from, 0, MPI_COMM_WORLD, &recv_status);
   }
-  float * temp = malloc(sizeof(float) * dim);
-  temp = HomomorphicDequantization_16(output, quantized_data->min, quantized_data->max, comm_sz, dim, 1, temp);
-  for(int i=0; i<dim; i++){
-    output_ptr[i] = temp[i];
-  }
-  free(temp);
+  
+  *output_ptr = HomomorphicDequantization_16(output, quantized_data->min, quantized_data->max, comm_sz, dim, 1, *output_ptr);
+  
   free(buffer);
   free(segment_sizes);
   free(segment_ends);
