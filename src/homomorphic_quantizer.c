@@ -36,7 +36,6 @@ struct unif_quant* HomomorphicQuantization(float* input, size_t input_size, MPI_
 	float range = out->max - out->min;
 	float min = out->min;
   float step = (hom_repr_range - 1) / range;
-
 	#pragma omp parallel for
 	for(int i = 0; i < input_size; i++){
 		float quant = round((input[i] - min) * step);
