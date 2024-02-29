@@ -76,10 +76,9 @@ int main(int argc, char **argv) {
   /*if(my_rank==0) printf("\nALLRED VECTOR\n");
   MPI_Barrier(MPI_COMM_WORLD);
   ProcessPrinter(out, dim, my_rank, comm_sz, FLOAT);
-  /*
+  */
 
-
-  //DO NOT USE THIS FOR TESTING, THIS IS FOR DEBUGGING
+  // DO NOT USE THIS FOR TESTING, THIS IS FOR DEBUGGING
   /*if (my_rank == 0){
     float error = NormalizedMSE(out, control, dim);
     printf("error: %f\n", error);
