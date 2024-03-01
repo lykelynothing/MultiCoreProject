@@ -133,7 +133,6 @@ float* NormalizedSymmetricDequantization_16(uint16_t* in, size_t input_size){
 struct non_linear_quant* NonLinearQuantization(float* in, size_t input_size, int type, void* struct_ptr){
 	float min, max;
 	float* temp = RangeReducer(in, input_size, &min, &max);
-	
 	switch(type){
 		case 1: {
 			MuLawCompander(temp, input_size);
@@ -144,7 +143,7 @@ struct non_linear_quant* NonLinearQuantization(float* in, size_t input_size, int
 			break;
     }
 		default:{
-			printf("\tERROR\t companding type not valid\n");
+			printf("ERROR:\tcompanding type not valid\n");
 			free(temp);
 			return NULL;
     }
@@ -204,7 +203,7 @@ float* NonLinearDequantization(struct non_linear_quant* in, size_t input_size, f
 			break;
     }
 		default: {
-			printf("\tERROR\t companding type not valid\n");
+			printf("\nERROR:\t companding type not valid\n\n");
 			return NULL;
     }
 	}

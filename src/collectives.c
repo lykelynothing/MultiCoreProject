@@ -365,8 +365,9 @@ void *Quantize(float *sendbuf, int count, QUANT algo, void *struct_ptr) {
     case NON_LINEAR: {
       char *string_type_env = getenv("NON_LINEAR_TYPE");
       int type;
-      if (string_type_env != NULL)
+      if (string_type_env != NULL){
         type = atoi(string_type_env);
+      }
       else {
         printf("\nERROR : Couldn't find a type env_var, aborting...\n\n");
         return NULL;
