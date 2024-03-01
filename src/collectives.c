@@ -489,10 +489,13 @@ void *Receive(QUANT algo, int dim, int source, void *void_ptr) {
                MPI_STATUS_IGNORE);
       MPI_Recv(&str_ptr1->max, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD,
                MPI_STATUS_IGNORE);
+
       MPI_Recv(str_ptr1->vec, dim, MPI_UINT8_T, source, 0, MPI_COMM_WORLD,
                MPI_STATUS_IGNORE);
+
       MPI_Recv(str_ptr1->codebook, REPR_RANGE, MPI_FLOAT, source, 0,
                MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
       break;
     }
     case NON_LINEAR: {
@@ -679,6 +682,7 @@ void *Allocate(QUANT algo, int count) {
       void_ptr = malloc(sizeof(struct lloyd_max_quant));
       struct lloyd_max_quant *tmp_ptr1 = (struct lloyd_max_quant *)void_ptr;
       tmp_ptr1->vec = malloc(sizeof(uint8_t) * count);
+      tmp_ptr1->codebook = malloc(sizeof(float) * count);
       break;
     }
     case NON_LINEAR: {
@@ -745,6 +749,7 @@ void Free(QUANT algo, void *void_ptr) {
     case LLOYD: {
       struct lloyd_max_quant *tmp_ptr1 = (struct lloyd_max_quant *)void_ptr;
       free(tmp_ptr1->vec);
+      free(tmp_ptr1->codebook);
       free(tmp_ptr1);
       break;
     }
