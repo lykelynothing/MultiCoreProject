@@ -54,9 +54,10 @@ int MPI_Allreduce(const void *sendbuf, void *recvbuf, int count,
     if (quant_algo != HOMOMORPHIC)
       RecursiveHalvingSend(my_rank, comm_sz, count, quant_algo,
                            (float *)sendbuf, (float *)recvbuf);
-    else
+    else{
       RecursiveHalvingSendHomomorphic(my_rank, comm_sz, count, (float *)sendbuf,
                                       (float *)recvbuf);
+    }
     break;
   }
   case RING: {
@@ -140,24 +141,29 @@ int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count,
   struct unif_quant *struct_ptr = (struct unif_quant *)void_ptr;
   struct unif_quant *rcv_bf;
   float *tmp;
+  int sent = 0;
 
   while (remaining != 1) {
     half = remaining / 2;
     if (my_rank < half) {
       int source = half + my_rank;
       // receive struct
+      printf("Proc %d receiving from %d \n", my_rank, source);
       rcv_bf =
           (struct unif_quant *)Receive(HOMOMORPHIC, count, source, struct_ptr);
       for (int i = 0; i < count; i++) {
         struct_ptr->vec[i] = struct_ptr->vec[i] + rcv_bf->vec[i];
       }
-    } else {
+    } else if (sent == 0) {
       int dest = my_rank % half;
       // send struct
+      printf("Proc %d sending to %d \n", my_rank, dest);
       Send(struct_ptr, HOMOMORPHIC, count, dest);
+      sent = 1;
     }
     remaining = remaining / 2;
     MPI_Barrier(MPI_COMM_WORLD);
+
   }
 
   MPI_Bcast(struct_ptr->vec, count, MPI_UINT8_T, 0, MPI_COMM_WORLD);
