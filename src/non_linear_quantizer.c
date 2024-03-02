@@ -192,8 +192,8 @@ struct non_linear_quant_16* NonLinearQuantization_16(float* in, size_t input_siz
 	return out;
 }
 
-float* NonLinearDequantization(struct non_linear_quant* in, size_t input_size, float* out){	
-  switch(in->type){
+float* NonLinearDequantization(struct non_linear_quant* in, size_t input_size, float* out, int type){	
+  switch(type){
 		case 1: {
 			MuLawExpander(out, input_size);
 			break;
@@ -214,8 +214,8 @@ float* NonLinearDequantization(struct non_linear_quant* in, size_t input_size, f
 }
 
 
-float* NonLinearDequantization_16(struct non_linear_quant_16* in, size_t input_size, float* out){	
-  switch(in->type){
+float* NonLinearDequantization_16(struct non_linear_quant_16* in, size_t input_size, float* out, int type){	
+  switch(type){
 		case 1:{
 			MuLawExpander(out, input_size);
 			break;
