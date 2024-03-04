@@ -7,6 +7,8 @@
 #include "collectives.h"
 #include "tools.h"
 
+float MIN_R = -500.0, MAX_R = 500.0;
+
 int main(int argc, char **argv) {
   size_t dim;
   switch (argc) {
@@ -36,12 +38,12 @@ int main(int argc, char **argv) {
   MPI_Comm_size(MPI_COMM_WORLD, &comm_sz);
   MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
-/*
-  // ADJUST CORE COUNT TO THE NUMBER OF CORES OF YOUR CPU
-  int core_count = 8;
-  int n_threads = core_count / comm_sz;
-  omp_set_num_threads(n_threads);
-*/
+  /*
+    // ADJUST CORE COUNT TO THE NUMBER OF CORES OF YOUR CPU
+    int core_count = 8;
+    int n_threads = core_count / comm_sz;
+    omp_set_num_threads(n_threads);
+  */
 
   if (dim < comm_sz) {
     printf("ERROR!! The dimension of the array must be bigger than comm_sz\n");
@@ -51,7 +53,7 @@ int main(int argc, char **argv) {
 
   srand(time(NULL) + my_rank);
 
-  float *in = RandFloatGenerator(dim, -500.0, 500);
+  float *in = RandFloatGenerator(dim, MIN_R, MAX_R);
   /*if(my_rank==0) printf("\nORIGINAL VECTORS\n");
   MPI_Barrier(MPI_COMM_WORLD);
   ProcessPrinter(in, dim, my_rank, comm_sz, FLOAT);*/

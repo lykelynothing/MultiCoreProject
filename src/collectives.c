@@ -5,6 +5,7 @@
 #include <time.h>
 
 #include "homomorphic_quantizer.h"
+#include "known_range_quantizer.h"
 #include "lloyd_max_quantizer.h"
 #include "non_linear_quantizer.h"
 #include "tools.h"
@@ -187,9 +188,32 @@ int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count,
 int RingAllreduce(int my_rank, int comm_sz, float *data, size_t dim,
                   float **output_ptr, QUANT algo) {
   void *void_ptr = Allocate(algo, dim);
-
-  HomomorphicQuantization(data, dim, MPI_COMM_WORLD, void_ptr);
+  switch (algo) {
+  case UNIFORM: {
+    UniformRangedQuantization(data, dim, void_ptr);
+    break;
+  }
+  case HOMOMORPHIC: {
+    HomomorphicQuantization(data, dim, MPI_COMM_WORLD, void_ptr);
+    break;
+  }
+  case KNOWN_RANGE: {
+    KnownRangeQuantization(data, dim, MPI_COMM_WORLD, void_ptr);
+    break;
+  }
+  case NON_LINEAR: {
+    printf("ERROR!! Non linear quantization not supported by "
+           "RingAllreduction!!\nreturning . . .");
+    return MPI_ERR_OTHER;
+  }
+  case LLOYD: {
+    printf("ERROR!! Lloyd quantization not supported by "
+           "RingAllreduction!!\nreturning . . .");
+    return MPI_ERR_OTHER;
+  }
+  }
   struct unif_quant *quantized_data = (struct unif_quant *)void_ptr;
+
   // The array will be divided into  N equal-sized chunks
   size_t size = dim / comm_sz;
   size_t remainder = dim % size;
@@ -281,7 +305,30 @@ int RingAllreduce_16(int my_rank, int comm_sz, float *data, size_t dim,
                      float **output_ptr, QUANT algo) {
   void *void_ptr = Allocate(algo, dim);
 
-  HomomorphicQuantization_16(data, dim, MPI_COMM_WORLD, void_ptr);
+  switch (algo) {
+  case UNIFORM: {
+    UniformRangedQuantization_16(data, dim, void_ptr);
+    break;
+  }
+  case HOMOMORPHIC: {
+    HomomorphicQuantization_16(data, dim, MPI_COMM_WORLD, void_ptr);
+    break;
+  }
+  case KNOWN_RANGE: {
+    KnownRangeQuantization_16(data, dim, MPI_COMM_WORLD, void_ptr);
+    break;
+  }
+  case NON_LINEAR: {
+    printf("ERROR!! Non linear quantization not supported by "
+           "RingAllreduction!!\nreturning . . .");
+    return MPI_ERR_OTHER;
+  }
+  case LLOYD: {
+    printf("ERROR!! Lloyd quantization not supported by "
+           "RingAllreduction!!\nreturning . . .");
+    return MPI_ERR_OTHER;
+  }
+  }
   struct unif_quant_16 *quantized_data = (struct unif_quant_16 *)void_ptr;
 
   size_t size = dim / comm_sz;
@@ -352,8 +399,6 @@ int RingAllreduce_16(int my_rank, int comm_sz, float *data, size_t dim,
   free(quantized_data);
   return MPI_SUCCESS;
 }
-
-
 
 /* Function takes float vector and quantizes it according to
  * the kind of algorithm specified by int algo. Struct in arguments
@@ -660,23 +705,18 @@ int Send(void *struct_ptr, QUANT algo, int dim, int dest) {
   return MPI_SUCCESS;
 }
 
-void *Allocate(QUANT algo, int count)
-{
+void *Allocate(QUANT algo, int count) {
   void *void_ptr;
-  if (BITS == 8)
-  {
-    switch (algo)
-    {
-    case LLOYD:
-    {
+  if (BITS == 8) {
+    switch (algo) {
+    case LLOYD: {
       void_ptr = malloc(sizeof(struct lloyd_max_quant));
       struct lloyd_max_quant *tmp_ptr1 = (struct lloyd_max_quant *)void_ptr;
       tmp_ptr1->vec = malloc(sizeof(uint8_t) * count);
       tmp_ptr1->codebook = malloc(sizeof(float) * count);
       break;
     }
-    case NON_LINEAR:
-    {
+    case NON_LINEAR: {
       void_ptr = malloc(sizeof(struct non_linear_quant));
       struct non_linear_quant *tmp_ptr2 = (struct non_linear_quant *)void_ptr;
       tmp_ptr2->vec = malloc(sizeof(uint8_t) * count);
@@ -684,8 +724,7 @@ void *Allocate(QUANT algo, int count)
       char *string_type_env = getenv("NON_LINEAR_TYPE");
       if (string_type_env != NULL)
         type = atoi(string_type_env);
-      else
-      {
+      else {
         printf("\nERROR : Couldn't find a type env_var, aborting...\n\n");
         return NULL;
       }
@@ -693,62 +732,51 @@ void *Allocate(QUANT algo, int count)
       tmp_ptr2->type = type;
       break;
     }
-    case UNIFORM:
-    {
+    case UNIFORM: {
       void_ptr = malloc(sizeof(struct unif_quant));
       struct unif_quant *tmp_ptr3 = (struct unif_quant *)void_ptr;
       tmp_ptr3->vec = malloc(sizeof(uint8_t) * count);
       break;
     }
-    case HOMOMORPHIC:
-    {
+    case HOMOMORPHIC: {
       void_ptr = malloc(sizeof(struct unif_quant));
       struct unif_quant *tmp_ptr4 = (struct unif_quant *)void_ptr;
       tmp_ptr4->vec = malloc(sizeof(uint8_t) * count);
       break;
     }
-    default:
-    {
+    default: {
       break;
     }
     }
-  }
-  else if (BITS == 16)
-  {
-    switch (algo)
-    {
-    case LLOYD:
-    {
+  } else if (BITS == 16) {
+    switch (algo) {
+    case LLOYD: {
       void_ptr = malloc(sizeof(struct lloyd_max_quant_16));
       struct lloyd_max_quant_16 *tmp_ptr1 =
           (struct lloyd_max_quant_16 *)void_ptr;
       tmp_ptr1->vec = malloc(sizeof(uint16_t) * count);
       break;
     }
-    case NON_LINEAR:
-    {
+    case NON_LINEAR: {
       void_ptr = malloc(sizeof(struct non_linear_quant_16));
       struct non_linear_quant_16 *tmp_ptr2 =
           (struct non_linear_quant_16 *)void_ptr;
       tmp_ptr2->vec = malloc(sizeof(uint16_t) * count);
       break;
     }
-    case UNIFORM:
-    {
+    case UNIFORM: {
       void_ptr = malloc(sizeof(struct unif_quant_16));
       struct unif_quant_16 *tmp_ptr3 = (struct unif_quant_16 *)void_ptr;
       tmp_ptr3->vec = malloc(sizeof(uint16_t) * count);
       break;
     }
-    case HOMOMORPHIC:
-    {
+    case HOMOMORPHIC: {
       void_ptr = malloc(sizeof(struct unif_quant_16));
       struct unif_quant_16 *tmp_ptr4 = (struct unif_quant_16 *)void_ptr;
       tmp_ptr4->vec = malloc(sizeof(uint16_t) * count);
       break;
     }
-    default:
-    {
+    default: {
       break;
     }
     }
