@@ -4,8 +4,6 @@
 
 #include "tools.h"
 
-extern float MIN_R, MAX_R;
-
 /* Work exactly like a normal Uniform Ranged Quantization but here the
  * quantization interval is known in advance and equal for all processes. To
  * allow for sum of quantized values, we need to make the REPR_RANGE smaller.

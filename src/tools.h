@@ -7,6 +7,7 @@
 
 extern int BITS;
 extern int REPR_RANGE;
+extern float MIN_R, MAX_R;
 
 typedef enum {
   INT,

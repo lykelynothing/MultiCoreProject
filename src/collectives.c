@@ -212,6 +212,7 @@ int RingAllreduce(int my_rank, int comm_sz, float *data, size_t dim,
     return MPI_ERR_OTHER;
   }
   }
+
   struct unif_quant *quantized_data = (struct unif_quant *)void_ptr;
 
   // The array will be divided into  N equal-sized chunks
@@ -744,6 +745,12 @@ void *Allocate(QUANT algo, int count) {
       tmp_ptr4->vec = malloc(sizeof(uint8_t) * count);
       break;
     }
+    case KNOWN_RANGE: {
+      void_ptr = malloc(sizeof(struct unif_quant));
+      struct unif_quant *tmp_ptr4 = (struct unif_quant *)void_ptr;
+      tmp_ptr4->vec = malloc(sizeof(uint8_t) * count);
+      break;
+    }
     default: {
       break;
     }
@@ -771,6 +778,12 @@ void *Allocate(QUANT algo, int count) {
       break;
     }
     case HOMOMORPHIC: {
+      void_ptr = malloc(sizeof(struct unif_quant_16));
+      struct unif_quant_16 *tmp_ptr4 = (struct unif_quant_16 *)void_ptr;
+      tmp_ptr4->vec = malloc(sizeof(uint16_t) * count);
+      break;
+    }
+    case KNOWN_RANGE: {
       void_ptr = malloc(sizeof(struct unif_quant_16));
       struct unif_quant_16 *tmp_ptr4 = (struct unif_quant_16 *)void_ptr;
       tmp_ptr4->vec = malloc(sizeof(uint16_t) * count);
@@ -812,6 +825,12 @@ void Free(QUANT algo, void *void_ptr) {
       free(tmp_ptr4);
       break;
     }
+    case KNOWN_RANGE: {
+      struct unif_quant *tmp_ptr4 = (struct unif_quant *)void_ptr;
+      free(tmp_ptr4->vec);
+      free(tmp_ptr4);
+      break;
+    }
     default: {
       break;
     }
@@ -839,6 +858,12 @@ void Free(QUANT algo, void *void_ptr) {
       break;
     }
     case HOMOMORPHIC: {
+      struct unif_quant_16 *tmp_ptr4 = (struct unif_quant_16 *)void_ptr;
+      free(tmp_ptr4->vec);
+      free(tmp_ptr4);
+      break;
+    }
+    case KNOWN_RANGE: {
       struct unif_quant_16 *tmp_ptr4 = (struct unif_quant_16 *)void_ptr;
       free(tmp_ptr4->vec);
       free(tmp_ptr4);
