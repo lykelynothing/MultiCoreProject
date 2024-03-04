@@ -27,6 +27,7 @@ int RingAllreduce_16(int my_rank, int comm_sz, float *data, size_t dim,
 void *Allocate(QUANT algo, int count);
 void Free(QUANT algo, void *void_ptr);
 
+// WARNING: what is this???
 static int type;
 
 // TODO: Write correct precise returns
