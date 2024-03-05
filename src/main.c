@@ -36,12 +36,10 @@ int main(int argc, char **argv) {
   MPI_Comm_size(MPI_COMM_WORLD, &comm_sz);
   MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
-/*
   // ADJUST CORE COUNT TO THE NUMBER OF CORES OF YOUR CPU
-  int core_count = 8;
+  /*int core_count = 8;
   int n_threads = core_count / comm_sz;
-  omp_set_num_threads(n_threads);
-*/
+  omp_set_num_threads(n_threads);*/
 
   if (dim < comm_sz) {
     printf("ERROR!! The dimension of the array must be bigger than comm_sz\n");
@@ -51,10 +49,11 @@ int main(int argc, char **argv) {
 
   srand(time(NULL) + my_rank);
 
-  float *in = RandFloatGenerator(dim, -500.0, 500);
-  /*if(my_rank==0) printf("\nORIGINAL VECTORS\n");
+  float *in = RandFloatGenerator(dim, 500, -500);
+  if (my_rank == 0)
+    printf("\nORIGINAL VECTORS\n");
   MPI_Barrier(MPI_COMM_WORLD);
-  ProcessPrinter(in, dim, my_rank, comm_sz, FLOAT);*/
+  ProcessPrinter(in, dim, my_rank, comm_sz, FLOAT);
 
   float *control = malloc(dim * sizeof(float));
   start_v = MPI_Wtime();
@@ -63,10 +62,11 @@ int main(int argc, char **argv) {
   loc_elapsed_v = end_v - start_v;
   PMPI_Reduce(&loc_elapsed_v, &cpu_time_v, 1, MPI_DOUBLE, MPI_MAX, 0,
               MPI_COMM_WORLD);
-  /*if(my_rank==0) printf("\nCONTROL VECTOR\n");
+  if (my_rank == 0)
+    printf("\nCONTROL VECTOR\n");
   MPI_Barrier(MPI_COMM_WORLD);
   ProcessPrinter(control, dim, my_rank, comm_sz, FLOAT);
-  */
+
   float *out = malloc(dim * sizeof(float));
   MPI_Barrier(MPI_COMM_WORLD);
   start_q = MPI_Wtime();
@@ -75,27 +75,28 @@ int main(int argc, char **argv) {
   loc_elapsed_q = end_q - start_q;
   PMPI_Reduce(&loc_elapsed_q, &cpu_time_q, 1, MPI_DOUBLE, MPI_MAX, 0,
               MPI_COMM_WORLD);
-  /*if(my_rank==0) printf("\nALLRED VECTOR\n");
+  if (my_rank == 0)
+    printf("\nALLRED VECTOR\n");
   MPI_Barrier(MPI_COMM_WORLD);
   ProcessPrinter(out, dim, my_rank, comm_sz, FLOAT);
-  */
+
   // DO NOT USE THIS FOR TESTING, THIS IS FOR DEBUGGING
-  /*if (my_rank == 0){
+  if (my_rank == 0) {
     float error = NormalizedMSE(out, control, dim);
     printf("error: %f\n", error);
     printf("quantized allreduce: %lf\n", cpu_time_q);
     printf("vanilla allreduce: %lf\n", cpu_time_v);
     printf("dim: %ld\n", dim);
-  }*/
+  }
 
   // USE THIS FOR TESTING AND DO NOT PRINT ANYTHING ELSE
-  if (my_rank == 0) {
-    float error = NormalizedMSE(out, control, dim);
-    printf("%f\n", error);
-    printf("%lf\n", cpu_time_q);
-    printf("%lf\n", cpu_time_v);
-    printf("%ld\n", dim);
-  }
+  // if (my_rank == 0) {
+  //   float error = NormalizedMSE(out, control, dim);
+  //   printf("%f\n", error);
+  //   printf("%lf\n", cpu_time_q);
+  //   printf("%lf\n", cpu_time_v);
+  //   printf("%ld\n", dim);
+  // }
 
   free(in);
   free(out);

@@ -25,6 +25,7 @@ typedef enum {
   HOMOMORPHIC,
   NON_LINEAR,
   LLOYD,
+  KNOWN_RANGE,
 } QUANT;
 
 struct unif_quant {

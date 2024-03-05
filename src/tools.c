@@ -52,6 +52,8 @@ void GetEnvVariables(SEND *send_algo, QUANT *quant_algo) {
     *quant_algo = UNIFORM;
   else if (strcmp(quant_env_var, "HOMOMORPHIC") == 0)
     *quant_algo = HOMOMORPHIC;
+  else if (strcmp(quant_env_var, "KNOWN_RANGE") == 0)
+    *quant_algo = KNOWN_RANGE;
   else {
     printf("\nERROR!! Invalid QUANT_ALGO.\n export "
            "QUANT_ALGO=LLOYD|NON_LINEAR|UNFIORM\n");

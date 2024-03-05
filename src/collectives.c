@@ -5,6 +5,7 @@
 #include <time.h>
 
 #include "homomorphic_quantizer.h"
+#include "known_range_quantizer.h"
 #include "lloyd_max_quantizer.h"
 #include "non_linear_quantizer.h"
 #include "tools.h"
@@ -18,7 +19,8 @@ void DequantizeVector(void *struct_ptr, float *dequantized, QUANT algo,
 int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, QUANT algo,
                          float *my_numbers, float *recv_buf);
 int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count,
-                                    float *sendbuf, float *recvbuf);
+                                    QUANT algo, float *sendbuf,
+                                    float **recvbuf);
 int RingAllreduce(int my_rank, int comm_sz, float *data, size_t dim,
                   float **output_ptr, QUANT algo);
 int RingAllreduce_16(int my_rank, int comm_sz, float *data, size_t dim,
@@ -26,6 +28,7 @@ int RingAllreduce_16(int my_rank, int comm_sz, float *data, size_t dim,
 void *Allocate(QUANT algo, int count);
 void Free(QUANT algo, void *void_ptr);
 
+// WARNING: what is this???
 static int type;
 
 // TODO: Write correct precise returns
@@ -44,20 +47,18 @@ int MPI_Allreduce(const void *sendbuf, void *recvbuf, int count,
   SEND send_algo;
   QUANT quant_algo;
   GetEnvVariables(&send_algo, &quant_algo);
-
   int my_rank, comm_sz;
   MPI_Comm_rank(comm, &my_rank);
   MPI_Comm_size(comm, &comm_sz);
 
   switch (send_algo) {
   case REC_HALVING: {
-    if (quant_algo != HOMOMORPHIC)
+    if (quant_algo != HOMOMORPHIC && quant_algo != KNOWN_RANGE)
       RecursiveHalvingSend(my_rank, comm_sz, count, quant_algo,
                            (float *)sendbuf, (float *)recvbuf);
-    else{
-      RecursiveHalvingSendHomomorphic(my_rank, comm_sz, count, (float *)sendbuf,
-                                      (float *)recvbuf);
-    }
+    else
+      RecursiveHalvingSendHomomorphic(my_rank, comm_sz, count, quant_algo,
+                                      (float *)sendbuf, (float **)&(recvbuf));
     break;
   }
   case RING: {
@@ -74,7 +75,6 @@ int MPI_Allreduce(const void *sendbuf, void *recvbuf, int count,
     break;
   }
   }
-
   return MPI_SUCCESS;
 }
 
@@ -133,33 +133,41 @@ int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, QUANT algo,
  * dequantization only happen once i.e. before and after all reductions
  * respectively have been executed */
 int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count,
-                                    float *sendbuf, float *recvbuf) {
+                                    QUANT algo, float *sendbuf,
+                                    float **recvbuf) {
   int remaining = comm_sz;
   int half;
-  void *void_ptr = Allocate(HOMOMORPHIC, count);
-  HomomorphicQuantization(sendbuf, count, MPI_COMM_WORLD, void_ptr);
+  void *void_ptr = Allocate(algo, count);
+  switch (algo) {
+  case HOMOMORPHIC: {
+    HomomorphicQuantization(sendbuf, count, MPI_COMM_WORLD, void_ptr);
+    break;
+  }
+  case KNOWN_RANGE: {
+    KnownRangeQuantization(sendbuf, count, MPI_COMM_WORLD, void_ptr);
+    break;
+  }
+  default: {
+    printf("ERROR!! Returning . . . \n");
+    return MPI_ERR_OTHER;
+  }
+  }
   struct unif_quant *struct_ptr = (struct unif_quant *)void_ptr;
   struct unif_quant *rcv_bf;
-  float *tmp;
-  int sent = 0;
 
   while (remaining != 1) {
     half = remaining / 2;
     if (my_rank < half) {
       int source = half + my_rank;
       // receive struct
-      printf("Proc %d receiving from %d \n", my_rank, source);
-      rcv_bf =
-          (struct unif_quant *)Receive(HOMOMORPHIC, count, source, struct_ptr);
+      rcv_bf = (struct unif_quant *)Receive(algo, count, source, struct_ptr);
       for (int i = 0; i < count; i++) {
         struct_ptr->vec[i] = struct_ptr->vec[i] + rcv_bf->vec[i];
       }
     } else if (sent == 0) {
       int dest = my_rank % half;
       // send struct
-      printf("Proc %d sending to %d \n", my_rank, dest);
-      Send(struct_ptr, HOMOMORPHIC, count, dest);
-      sent = 1;
+      Send(struct_ptr, algo, count, dest);
     }
     remaining = remaining / 2;
     MPI_Barrier(MPI_COMM_WORLD);
@@ -168,15 +176,11 @@ int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count,
 
   MPI_Bcast(struct_ptr->vec, count, MPI_UINT8_T, 0, MPI_COMM_WORLD);
 
-  tmp = malloc(sizeof(float) * count);
-  tmp = HomomorphicDequantization(struct_ptr->vec, struct_ptr->min,
-                                  struct_ptr->max, comm_sz, count, 1, tmp);
-  for (int i = 0; i < count; i++)
-    recvbuf[i] = tmp[i];
+  *recvbuf =
+      HomomorphicDequantization(struct_ptr->vec, struct_ptr->min,
+                                struct_ptr->max, comm_sz, count, 1, *recvbuf);
 
-  free(tmp);
-  // free(struct_ptr -> vec);
-  // free(struct_ptr);
+  Free(algo, struct_ptr);
 
   return MPI_SUCCESS;
 }
@@ -193,9 +197,33 @@ int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count,
 int RingAllreduce(int my_rank, int comm_sz, float *data, size_t dim,
                   float **output_ptr, QUANT algo) {
   void *void_ptr = Allocate(algo, dim);
+  switch (algo) {
+  case UNIFORM: {
+    UniformRangedQuantization(data, dim, void_ptr);
+    break;
+  }
+  case HOMOMORPHIC: {
+    HomomorphicQuantization(data, dim, MPI_COMM_WORLD, void_ptr);
+    break;
+  }
+  case KNOWN_RANGE: {
+    KnownRangeQuantization(data, dim, MPI_COMM_WORLD, void_ptr);
+    break;
+  }
+  case NON_LINEAR: {
+    printf("ERROR!! Non linear quantization not supported by "
+           "RingAllreduction!!\nreturning . . .");
+    return MPI_ERR_OTHER;
+  }
+  case LLOYD: {
+    printf("ERROR!! Lloyd quantization not supported by "
+           "RingAllreduction!!\nreturning . . .");
+    return MPI_ERR_OTHER;
+  }
+  }
 
-  HomomorphicQuantization(data, dim, MPI_COMM_WORLD, void_ptr);
   struct unif_quant *quantized_data = (struct unif_quant *)void_ptr;
+
   // The array will be divided into  N equal-sized chunks
   size_t size = dim / comm_sz;
   size_t remainder = dim % size;
@@ -287,7 +315,30 @@ int RingAllreduce_16(int my_rank, int comm_sz, float *data, size_t dim,
                      float **output_ptr, QUANT algo) {
   void *void_ptr = Allocate(algo, dim);
 
-  HomomorphicQuantization_16(data, dim, MPI_COMM_WORLD, void_ptr);
+  switch (algo) {
+  case UNIFORM: {
+    UniformRangedQuantization_16(data, dim, void_ptr);
+    break;
+  }
+  case HOMOMORPHIC: {
+    HomomorphicQuantization_16(data, dim, MPI_COMM_WORLD, void_ptr);
+    break;
+  }
+  case KNOWN_RANGE: {
+    KnownRangeQuantization_16(data, dim, MPI_COMM_WORLD, void_ptr);
+    break;
+  }
+  case NON_LINEAR: {
+    printf("ERROR!! Non linear quantization not supported by "
+           "RingAllreduction!!\nreturning . . .");
+    return MPI_ERR_OTHER;
+  }
+  case LLOYD: {
+    printf("ERROR!! Lloyd quantization not supported by "
+           "RingAllreduction!!\nreturning . . .");
+    return MPI_ERR_OTHER;
+  }
+  }
   struct unif_quant_16 *quantized_data = (struct unif_quant_16 *)void_ptr;
 
   size_t size = dim / comm_sz;
@@ -358,8 +409,6 @@ int RingAllreduce_16(int my_rank, int comm_sz, float *data, size_t dim,
   free(quantized_data);
   return MPI_SUCCESS;
 }
-
-
 
 /* Function takes float vector and quantizes it according to
  * the kind of algorithm specified by int algo. Struct in arguments
@@ -522,6 +571,16 @@ void *Receive(QUANT algo, int dim, int source, void *void_ptr) {
                MPI_STATUS_IGNORE);
       break;
     }
+    case KNOWN_RANGE: {
+      struct unif_quant *str_ptr4 = (struct unif_quant *)void_ptr;
+      MPI_Recv(&str_ptr4->min, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD,
+               MPI_STATUS_IGNORE);
+      MPI_Recv(&str_ptr4->max, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD,
+               MPI_STATUS_IGNORE);
+      MPI_Recv(str_ptr4->vec, dim, MPI_UINT8_T, source, 0, MPI_COMM_WORLD,
+               MPI_STATUS_IGNORE);
+      break;
+    }
     default: {
       printf("ERROR!! Quant algo not valid\n");
       break;
@@ -564,6 +623,16 @@ void *Receive(QUANT algo, int dim, int source, void *void_ptr) {
       break;
     }
     case HOMOMORPHIC: {
+      struct unif_quant_16 *str_ptr4 = (struct unif_quant_16 *)void_ptr;
+      MPI_Recv(&str_ptr4->min, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD,
+               MPI_STATUS_IGNORE);
+      MPI_Recv(&str_ptr4->max, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD,
+               MPI_STATUS_IGNORE);
+      MPI_Recv(str_ptr4->vec, dim, MPI_UINT16_T, source, 0, MPI_COMM_WORLD,
+               MPI_STATUS_IGNORE);
+      break;
+    }
+    case KNOWN_RANGE: {
       struct unif_quant_16 *str_ptr4 = (struct unif_quant_16 *)void_ptr;
       MPI_Recv(&str_ptr4->min, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD,
                MPI_STATUS_IGNORE);
@@ -618,6 +687,13 @@ int Send(void *struct_ptr, QUANT algo, int dim, int dest) {
       MPI_Send(str_ptr4->vec, dim, MPI_UINT8_T, dest, 0, MPI_COMM_WORLD);
       break;
     }
+    case KNOWN_RANGE: {
+      struct unif_quant *str_ptr4 = (struct unif_quant *)struct_ptr;
+      MPI_Send(&str_ptr4->min, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+      MPI_Send(&str_ptr4->max, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+      MPI_Send(str_ptr4->vec, dim, MPI_UINT8_T, dest, 0, MPI_COMM_WORLD);
+      break;
+    }
     default: {
       printf("ERROR!! Quant algo not valid (send_call)\n");
       break;
@@ -657,6 +733,13 @@ int Send(void *struct_ptr, QUANT algo, int dim, int dest) {
       MPI_Send(str_ptr4->vec, dim, MPI_UINT16_T, dest, 0, MPI_COMM_WORLD);
       break;
     }
+    case KNOWN_RANGE: {
+      struct unif_quant_16 *str_ptr4 = (struct unif_quant_16 *)struct_ptr;
+      MPI_Send(&str_ptr4->min, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+      MPI_Send(&str_ptr4->max, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+      MPI_Send(str_ptr4->vec, dim, MPI_UINT16_T, dest, 0, MPI_COMM_WORLD);
+      break;
+    }
     default: {
       printf("ERROR!! Quant algo not valid (send_call)\n");
       break;
@@ -666,23 +749,18 @@ int Send(void *struct_ptr, QUANT algo, int dim, int dest) {
   return MPI_SUCCESS;
 }
 
-void *Allocate(QUANT algo, int count)
-{
+void *Allocate(QUANT algo, int count) {
   void *void_ptr;
-  if (BITS == 8)
-  {
-    switch (algo)
-    {
-    case LLOYD:
-    {
+  if (BITS == 8) {
+    switch (algo) {
+    case LLOYD: {
       void_ptr = malloc(sizeof(struct lloyd_max_quant));
       struct lloyd_max_quant *tmp_ptr1 = (struct lloyd_max_quant *)void_ptr;
       tmp_ptr1->vec = malloc(sizeof(uint8_t) * count);
       tmp_ptr1->codebook = malloc(sizeof(float) * count);
       break;
     }
-    case NON_LINEAR:
-    {
+    case NON_LINEAR: {
       void_ptr = malloc(sizeof(struct non_linear_quant));
       struct non_linear_quant *tmp_ptr2 = (struct non_linear_quant *)void_ptr;
       tmp_ptr2->vec = malloc(sizeof(uint8_t) * count);
@@ -690,8 +768,7 @@ void *Allocate(QUANT algo, int count)
       char *string_type_env = getenv("NON_LINEAR_TYPE");
       if (string_type_env != NULL)
         type = atoi(string_type_env);
-      else
-      {
+      else {
         printf("\nERROR : Couldn't find a type env_var, aborting...\n\n");
         return NULL;
       }
@@ -699,62 +776,63 @@ void *Allocate(QUANT algo, int count)
       tmp_ptr2->type = type;
       break;
     }
-    case UNIFORM:
-    {
+    case UNIFORM: {
       void_ptr = malloc(sizeof(struct unif_quant));
       struct unif_quant *tmp_ptr3 = (struct unif_quant *)void_ptr;
       tmp_ptr3->vec = malloc(sizeof(uint8_t) * count);
       break;
     }
-    case HOMOMORPHIC:
-    {
+    case HOMOMORPHIC: {
       void_ptr = malloc(sizeof(struct unif_quant));
       struct unif_quant *tmp_ptr4 = (struct unif_quant *)void_ptr;
       tmp_ptr4->vec = malloc(sizeof(uint8_t) * count);
       break;
     }
-    default:
-    {
+    case KNOWN_RANGE: {
+      void_ptr = malloc(sizeof(struct unif_quant));
+      struct unif_quant *tmp_ptr4 = (struct unif_quant *)void_ptr;
+      tmp_ptr4->vec = malloc(sizeof(uint8_t) * count);
+      break;
+    }
+    default: {
       break;
     }
     }
-  }
-  else if (BITS == 16)
-  {
-    switch (algo)
-    {
-    case LLOYD:
-    {
+  } else if (BITS == 16) {
+    switch (algo) {
+    case LLOYD: {
       void_ptr = malloc(sizeof(struct lloyd_max_quant_16));
       struct lloyd_max_quant_16 *tmp_ptr1 =
           (struct lloyd_max_quant_16 *)void_ptr;
       tmp_ptr1->vec = malloc(sizeof(uint16_t) * count);
       break;
     }
-    case NON_LINEAR:
-    {
+    case NON_LINEAR: {
       void_ptr = malloc(sizeof(struct non_linear_quant_16));
       struct non_linear_quant_16 *tmp_ptr2 =
           (struct non_linear_quant_16 *)void_ptr;
       tmp_ptr2->vec = malloc(sizeof(uint16_t) * count);
       break;
     }
-    case UNIFORM:
-    {
+    case UNIFORM: {
       void_ptr = malloc(sizeof(struct unif_quant_16));
       struct unif_quant_16 *tmp_ptr3 = (struct unif_quant_16 *)void_ptr;
       tmp_ptr3->vec = malloc(sizeof(uint16_t) * count);
       break;
     }
-    case HOMOMORPHIC:
-    {
+    case HOMOMORPHIC: {
       void_ptr = malloc(sizeof(struct unif_quant_16));
       struct unif_quant_16 *tmp_ptr4 = (struct unif_quant_16 *)void_ptr;
       tmp_ptr4->vec = malloc(sizeof(uint16_t) * count);
       break;
     }
-    default:
-    {
+    case KNOWN_RANGE: {
+      void_ptr = malloc(sizeof(struct unif_quant_16));
+      struct unif_quant_16 *tmp_ptr4 = (struct unif_quant_16 *)void_ptr;
+      tmp_ptr4->vec = malloc(sizeof(uint16_t) * count);
+      break;
+    }
+    default: {
       break;
     }
     }
@@ -790,6 +868,12 @@ void Free(QUANT algo, void *void_ptr) {
       free(tmp_ptr4);
       break;
     }
+    case KNOWN_RANGE: {
+      struct unif_quant *tmp_ptr4 = (struct unif_quant *)void_ptr;
+      free(tmp_ptr4->vec);
+      free(tmp_ptr4);
+      break;
+    }
     default: {
       break;
     }
@@ -817,6 +901,12 @@ void Free(QUANT algo, void *void_ptr) {
       break;
     }
     case HOMOMORPHIC: {
+      struct unif_quant_16 *tmp_ptr4 = (struct unif_quant_16 *)void_ptr;
+      free(tmp_ptr4->vec);
+      free(tmp_ptr4);
+      break;
+    }
+    case KNOWN_RANGE: {
       struct unif_quant_16 *tmp_ptr4 = (struct unif_quant_16 *)void_ptr;
       free(tmp_ptr4->vec);
       free(tmp_ptr4);
