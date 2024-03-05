@@ -131,13 +131,16 @@ int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, QUANT algo,
 
 /* Like Normal Recursive halving but this time the quantization and
  * dequantization only happen once i.e. before and after all reductions
- * respectively have been executed */
+ * respectively have been executed (uses homomorphic quant algo)*/
 int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count,
                                     QUANT algo, float *sendbuf,
                                     float **recvbuf) {
   int remaining = comm_sz;
   int half;
+
   void *void_ptr = Allocate(algo, count);
+  void *tmp_bf = Allocate(algo, count);
+
   int sent = 0;
   switch (algo) {
   case HOMOMORPHIC: {
@@ -154,14 +157,14 @@ int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count,
   }
   }
   struct unif_quant *struct_ptr = (struct unif_quant *)void_ptr;
-  struct unif_quant *rcv_bf;
+  struct unif_quant *rcv_bf = (struct unif_quant *) tmp_bf;
 
   while (remaining != 1) {
     half = remaining / 2;
     if (my_rank < half) {
       int source = half + my_rank;
       // receive struct
-      rcv_bf = (struct unif_quant *)Receive(algo, count, source, struct_ptr);
+      Receive(algo, count, source, rcv_bf);
       for (int i = 0; i < count; i++) {
         struct_ptr->vec[i] = struct_ptr->vec[i] + rcv_bf->vec[i];
       }
@@ -183,6 +186,7 @@ int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count,
                                 struct_ptr->max, comm_sz, count, 1, *recvbuf);
 
   Free(algo, struct_ptr);
+  Free(algo, tmp_bf);
 
   return MPI_SUCCESS;
 }
