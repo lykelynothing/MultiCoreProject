@@ -11,7 +11,6 @@
 
 int BITS;
 int REPR_RANGE;
-float MIN_R = -500.0, MAX_R = 500.0;
 
 /* Function used to get environmental variables that will be used for the choice
  * of quantization algorithm, quantization precision (number of bits used) and

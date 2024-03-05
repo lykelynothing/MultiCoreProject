@@ -15,8 +15,8 @@ struct unif_quant *KnownRangeQuantization(float *input, size_t input_size,
   MPI_Comm_size(comm, &comm_sz);
   struct unif_quant *out = (struct unif_quant *)struct_ptr;
 
-  out->min = MIN_R;
-  out->max = MAX_R;
+  out->min = -500;
+  out->max = 500;
   // make the REPR_RANGE smaller to allow for reduction additions
   int pow = 1;
   while (pow < comm_sz) {
@@ -26,10 +26,11 @@ struct unif_quant *KnownRangeQuantization(float *input, size_t input_size,
   // calculate the steps of the quantization
   float hom_repr_range = REPR_RANGE / pow;
   float range = out->max - out->min;
+  float min = out->min;
   float step = (hom_repr_range - 1) / range;
 #pragma omp parallel for
   for (int i = 0; i < input_size; i++) {
-    float quant = round((input[i] - MIN_R) * step);
+    float quant = round((input[i] - min) * step);
     out->vec[i] = (uint8_t)quant;
   }
   return out;
@@ -44,8 +45,8 @@ struct unif_quant_16 *KnownRangeQuantization_16(float *input, size_t input_size,
   MPI_Comm_size(comm, &comm_sz);
   struct unif_quant_16 *out = (struct unif_quant_16 *)struct_ptr;
 
-  out->min = MIN_R;
-  out->max = MAX_R;
+  out->min = -500;
+  out->max = 500;
 
   int pow = 1;
   while (pow < comm_sz) {
@@ -54,10 +55,11 @@ struct unif_quant_16 *KnownRangeQuantization_16(float *input, size_t input_size,
 
   float hom_repr_range = REPR_RANGE / pow;
   float range = out->max - out->min;
+  float min = out->min;
   float step = (hom_repr_range - 1) / range;
 #pragma omp parallel for
   for (int i = 0; i < input_size; i++) {
-    float quant = round((input[i] - MIN_R) * step);
+    float quant = round((input[i] - min) * step);
     out->vec[i] = (uint16_t)quant;
   }
   return out;

@@ -49,7 +49,7 @@ int main(int argc, char **argv) {
 
   srand(time(NULL) + my_rank);
 
-  float *in = RandFloatGenerator(dim, MIN_R, MAX_R);
+  float *in = RandFloatGenerator(dim, 500, -500);
   if (my_rank == 0)
     printf("\nORIGINAL VECTORS\n");
   MPI_Barrier(MPI_COMM_WORLD);
@@ -81,22 +81,22 @@ int main(int argc, char **argv) {
   ProcessPrinter(out, dim, my_rank, comm_sz, FLOAT);
 
   // DO NOT USE THIS FOR TESTING, THIS IS FOR DEBUGGING
-  /*if (my_rank == 0){
+  if (my_rank == 0) {
     float error = NormalizedMSE(out, control, dim);
     printf("error: %f\n", error);
     printf("quantized allreduce: %lf\n", cpu_time_q);
     printf("vanilla allreduce: %lf\n", cpu_time_v);
     printf("dim: %ld\n", dim);
-  }*/
+  }
 
   // USE THIS FOR TESTING AND DO NOT PRINT ANYTHING ELSE
-  if (my_rank == 0) {
-    float error = NormalizedMSE(out, control, dim);
-    printf("%f\n", error);
-    printf("%lf\n", cpu_time_q);
-    printf("%lf\n", cpu_time_v);
-    printf("%ld\n", dim);
-  }
+  // if (my_rank == 0) {
+  //   float error = NormalizedMSE(out, control, dim);
+  //   printf("%f\n", error);
+  //   printf("%lf\n", cpu_time_q);
+  //   printf("%lf\n", cpu_time_v);
+  //   printf("%ld\n", dim);
+  // }
 
   free(in);
   free(out);

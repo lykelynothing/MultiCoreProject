@@ -19,7 +19,8 @@ void DequantizeVector(void *struct_ptr, float *dequantized, QUANT algo,
 int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, QUANT algo,
                          float *my_numbers, float *recv_buf);
 int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count,
-                                    float *sendbuf, float *recvbuf);
+                                    QUANT algo, float *sendbuf,
+                                    float **recvbuf);
 int RingAllreduce(int my_rank, int comm_sz, float *data, size_t dim,
                   float **output_ptr, QUANT algo);
 int RingAllreduce_16(int my_rank, int comm_sz, float *data, size_t dim,
@@ -46,19 +47,18 @@ int MPI_Allreduce(const void *sendbuf, void *recvbuf, int count,
   SEND send_algo;
   QUANT quant_algo;
   GetEnvVariables(&send_algo, &quant_algo);
-
   int my_rank, comm_sz;
   MPI_Comm_rank(comm, &my_rank);
   MPI_Comm_size(comm, &comm_sz);
 
   switch (send_algo) {
   case REC_HALVING: {
-    if (quant_algo != HOMOMORPHIC)
+    if (quant_algo != HOMOMORPHIC && quant_algo != KNOWN_RANGE)
       RecursiveHalvingSend(my_rank, comm_sz, count, quant_algo,
                            (float *)sendbuf, (float *)recvbuf);
     else
-      RecursiveHalvingSendHomomorphic(my_rank, comm_sz, count, (float *)sendbuf,
-                                      (float *)recvbuf);
+      RecursiveHalvingSendHomomorphic(my_rank, comm_sz, count, quant_algo,
+                                      (float *)sendbuf, (float **)&(recvbuf));
     break;
   }
   case RING: {
@@ -75,7 +75,6 @@ int MPI_Allreduce(const void *sendbuf, void *recvbuf, int count,
     break;
   }
   }
-
   return MPI_SUCCESS;
 }
 
@@ -134,29 +133,41 @@ int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, QUANT algo,
  * dequantization only happen once i.e. before and after all reductions
  * respectively have been executed */
 int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count,
-                                    float *sendbuf, float *recvbuf) {
+                                    QUANT algo, float *sendbuf,
+                                    float **recvbuf) {
   int remaining = comm_sz;
   int half;
-  void *void_ptr = Allocate(HOMOMORPHIC, count);
-  HomomorphicQuantization(sendbuf, count, MPI_COMM_WORLD, void_ptr);
+  void *void_ptr = Allocate(algo, count);
+  switch (algo) {
+  case HOMOMORPHIC: {
+    HomomorphicQuantization(sendbuf, count, MPI_COMM_WORLD, void_ptr);
+    break;
+  }
+  case KNOWN_RANGE: {
+    KnownRangeQuantization(sendbuf, count, MPI_COMM_WORLD, void_ptr);
+    break;
+  }
+  default: {
+    printf("ERROR!! Returning . . . \n");
+    return MPI_ERR_OTHER;
+  }
+  }
   struct unif_quant *struct_ptr = (struct unif_quant *)void_ptr;
   struct unif_quant *rcv_bf;
-  float *tmp;
 
   while (remaining != 1) {
     half = remaining / 2;
     if (my_rank < half) {
       int source = half + my_rank;
       // receive struct
-      rcv_bf =
-          (struct unif_quant *)Receive(HOMOMORPHIC, count, source, struct_ptr);
+      rcv_bf = (struct unif_quant *)Receive(algo, count, source, struct_ptr);
       for (int i = 0; i < count; i++) {
         struct_ptr->vec[i] = struct_ptr->vec[i] + rcv_bf->vec[i];
       }
     } else {
       int dest = my_rank % half;
       // send struct
-      Send(struct_ptr, HOMOMORPHIC, count, dest);
+      Send(struct_ptr, algo, count, dest);
     }
     remaining = remaining / 2;
     MPI_Barrier(MPI_COMM_WORLD);
@@ -164,15 +175,11 @@ int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count,
 
   MPI_Bcast(struct_ptr->vec, count, MPI_UINT8_T, 0, MPI_COMM_WORLD);
 
-  tmp = malloc(sizeof(float) * count);
-  tmp = HomomorphicDequantization(struct_ptr->vec, struct_ptr->min,
-                                  struct_ptr->max, comm_sz, count, 1, tmp);
-  for (int i = 0; i < count; i++)
-    recvbuf[i] = tmp[i];
+  *recvbuf =
+      HomomorphicDequantization(struct_ptr->vec, struct_ptr->min,
+                                struct_ptr->max, comm_sz, count, 1, *recvbuf);
 
-  free(tmp);
-  // free(struct_ptr -> vec);
-  // free(struct_ptr);
+  Free(algo, struct_ptr);
 
   return MPI_SUCCESS;
 }
@@ -563,6 +570,16 @@ void *Receive(QUANT algo, int dim, int source, void *void_ptr) {
                MPI_STATUS_IGNORE);
       break;
     }
+    case KNOWN_RANGE: {
+      struct unif_quant *str_ptr4 = (struct unif_quant *)void_ptr;
+      MPI_Recv(&str_ptr4->min, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD,
+               MPI_STATUS_IGNORE);
+      MPI_Recv(&str_ptr4->max, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD,
+               MPI_STATUS_IGNORE);
+      MPI_Recv(str_ptr4->vec, dim, MPI_UINT8_T, source, 0, MPI_COMM_WORLD,
+               MPI_STATUS_IGNORE);
+      break;
+    }
     default: {
       printf("ERROR!! Quant algo not valid\n");
       break;
@@ -605,6 +622,16 @@ void *Receive(QUANT algo, int dim, int source, void *void_ptr) {
       break;
     }
     case HOMOMORPHIC: {
+      struct unif_quant_16 *str_ptr4 = (struct unif_quant_16 *)void_ptr;
+      MPI_Recv(&str_ptr4->min, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD,
+               MPI_STATUS_IGNORE);
+      MPI_Recv(&str_ptr4->max, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD,
+               MPI_STATUS_IGNORE);
+      MPI_Recv(str_ptr4->vec, dim, MPI_UINT16_T, source, 0, MPI_COMM_WORLD,
+               MPI_STATUS_IGNORE);
+      break;
+    }
+    case KNOWN_RANGE: {
       struct unif_quant_16 *str_ptr4 = (struct unif_quant_16 *)void_ptr;
       MPI_Recv(&str_ptr4->min, 1, MPI_FLOAT, source, 0, MPI_COMM_WORLD,
                MPI_STATUS_IGNORE);
@@ -659,6 +686,13 @@ int Send(void *struct_ptr, QUANT algo, int dim, int dest) {
       MPI_Send(str_ptr4->vec, dim, MPI_UINT8_T, dest, 0, MPI_COMM_WORLD);
       break;
     }
+    case KNOWN_RANGE: {
+      struct unif_quant *str_ptr4 = (struct unif_quant *)struct_ptr;
+      MPI_Send(&str_ptr4->min, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+      MPI_Send(&str_ptr4->max, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+      MPI_Send(str_ptr4->vec, dim, MPI_UINT8_T, dest, 0, MPI_COMM_WORLD);
+      break;
+    }
     default: {
       printf("ERROR!! Quant algo not valid (send_call)\n");
       break;
@@ -692,6 +726,13 @@ int Send(void *struct_ptr, QUANT algo, int dim, int dest) {
       break;
     }
     case HOMOMORPHIC: {
+      struct unif_quant_16 *str_ptr4 = (struct unif_quant_16 *)struct_ptr;
+      MPI_Send(&str_ptr4->min, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+      MPI_Send(&str_ptr4->max, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
+      MPI_Send(str_ptr4->vec, dim, MPI_UINT16_T, dest, 0, MPI_COMM_WORLD);
+      break;
+    }
+    case KNOWN_RANGE: {
       struct unif_quant_16 *str_ptr4 = (struct unif_quant_16 *)struct_ptr;
       MPI_Send(&str_ptr4->min, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
       MPI_Send(&str_ptr4->max, 1, MPI_FLOAT, dest, 0, MPI_COMM_WORLD);
