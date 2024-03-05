@@ -138,6 +138,7 @@ int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count,
   int remaining = comm_sz;
   int half;
   void *void_ptr = Allocate(algo, count);
+  int sent = 0;
   switch (algo) {
   case HOMOMORPHIC: {
     HomomorphicQuantization(sendbuf, count, MPI_COMM_WORLD, void_ptr);
@@ -168,6 +169,7 @@ int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count,
       int dest = my_rank % half;
       // send struct
       Send(struct_ptr, algo, count, dest);
+      sent = 1;
     }
     remaining = remaining / 2;
     MPI_Barrier(MPI_COMM_WORLD);
