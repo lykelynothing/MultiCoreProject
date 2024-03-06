@@ -1,5 +1,4 @@
 #include <mpi.h>
-#include <stdio.h>
 #include <stdlib.h>
 
 #include "homomorphic_quantizer.h"
@@ -32,10 +31,9 @@ int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, QUANT algo,
 
       // all will now be contained inside struct_ptr
       DequantizeVector(struct_ptr, dequantized, algo, dim);
-      // probably need to free the vector allocated by the dequantizer
       // sum my array with received dequantized one
       for (int i = 0; i < dim; i++)
-        partial_sum[i] = partial_sum[i] + dequantized[i];
+        partial_sum[i] += dequantized[i];
     } else if (sent == 0) {
       int dest = my_rank % half;
       // first quantize
@@ -80,7 +78,7 @@ int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count,
       int source = half + my_rank;
       Receive(algo, count, source, rcv_bf);
       for (int i = 0; i < count; i++) {
-        struct_ptr->vec[i] = struct_ptr->vec[i] + rcv_bf->vec[i];
+        struct_ptr->vec[i] += rcv_bf->vec[i];
       }
     } else if (sent == 0) {
       int dest = my_rank % half;
@@ -97,6 +95,51 @@ int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count,
   *recvbuf =
       HomomorphicDequantization(struct_ptr->vec, struct_ptr->min,
                                 struct_ptr->max, comm_sz, count, 1, *recvbuf);
+
+  Free(algo, struct_ptr);
+  Free(algo, tmp_bf);
+
+  return MPI_SUCCESS;
+}
+
+/* Same as before but for for uint16*/
+int RecursiveHalvingSendHomomorphic_16(int my_rank, int comm_sz, int count,
+                                       QUANT algo, float *sendbuf,
+                                       float **recvbuf) {
+  int remaining = comm_sz;
+  int half;
+
+  void *void_ptr = Allocate(algo, count);
+  void_ptr = Quantize(sendbuf, count, algo, void_ptr);
+  struct unif_quant_16 *struct_ptr = (struct unif_quant_16 *)void_ptr;
+
+  void *tmp_bf = Allocate(algo, count);
+  struct unif_quant_16 *rcv_bf = (struct unif_quant_16 *)tmp_bf;
+
+  int sent = 0;
+  while (remaining != 1) {
+    half = remaining / 2;
+    if (my_rank < half) {
+      int source = half + my_rank;
+      Receive(algo, count, source, rcv_bf);
+      for (int i = 0; i < count; i++) {
+        struct_ptr->vec[i] += rcv_bf->vec[i];
+      }
+    } else if (sent == 0) {
+      int dest = my_rank % half;
+      Send(struct_ptr, algo, count, dest);
+      sent = 1;
+    }
+    remaining = remaining / 2;
+    MPI_Barrier(MPI_COMM_WORLD);
+  }
+
+  MPI_Bcast(struct_ptr->vec, count, MPI_UINT16_T, 0, MPI_COMM_WORLD);
+
+  // TODO: use deallocate
+  *recvbuf = HomomorphicDequantization_16(struct_ptr->vec, struct_ptr->min,
+                                          struct_ptr->max, comm_sz, count, 1,
+                                          *recvbuf);
 
   Free(algo, struct_ptr);
   Free(algo, tmp_bf);

@@ -8,5 +8,8 @@ int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, QUANT algo,
 int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count,
                                     QUANT algo, float *sendbuf,
                                     float **recvbuf);
+int RecursiveHalvingSendHomomorphic_16(int my_rank, int comm_sz, int count,
+                                       QUANT algo, float *sendbuf,
+                                       float **recvbuf);
 
 #endif

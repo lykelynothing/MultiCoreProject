@@ -22,18 +22,25 @@ int MPI_Allreduce(const void *sendbuf, void *recvbuf, int count,
   switch (send_algo) {
   case REC_HALVING: {
     if (quant_algo != HOMOMORPHIC && quant_algo != KNOWN_RANGE)
+      // this will handle automatically both BITS_VAR cases
       RecursiveHalvingSend(my_rank, comm_sz, count, quant_algo,
                            (float *)sendbuf, (float *)recvbuf);
-    else
-      RecursiveHalvingSendHomomorphic(my_rank, comm_sz, count, quant_algo,
-                                      (float *)sendbuf, (float **)&(recvbuf));
+    else {
+      if (BITS == 16)
+        RecursiveHalvingSendHomomorphic_16(my_rank, comm_sz, count, quant_algo,
+                                           (float *)sendbuf,
+                                           (float **)&(recvbuf));
+      else if (BITS == 8)
+        RecursiveHalvingSendHomomorphic(my_rank, comm_sz, count, quant_algo,
+                                        (float *)sendbuf, (float **)&(recvbuf));
+    }
     break;
   }
   case RING: {
     if (BITS == 16)
       RingAllreduce_16(my_rank, comm_sz, (float *)sendbuf, count,
                        (float **)&(recvbuf), quant_algo);
-    else
+    else if (BITS == 8)
       RingAllreduce(my_rank, comm_sz, (float *)sendbuf, count,
                     (float **)&(recvbuf), quant_algo);
     break;

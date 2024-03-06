@@ -37,9 +37,9 @@ int main(int argc, char **argv) {
   MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
   // ADJUST CORE COUNT TO THE NUMBER OF CORES OF YOUR CPU
-  /*int core_count = 8;
-  int n_threads = core_count / comm_sz;
-  omp_set_num_threads(n_threads);*/
+  int core_count = 8;
+  int n_threads = (core_count / comm_sz > 0) ? core_count / comm_sz : 1;
+  omp_set_num_threads(n_threads);
 
   if (dim < comm_sz) {
     printf("ERROR!! The dimension of the array must be bigger than comm_sz\n");
