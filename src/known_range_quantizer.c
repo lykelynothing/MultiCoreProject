@@ -4,10 +4,8 @@
 
 #include "tools.h"
 
-/* Work exactly like a normal Uniform Ranged Quantization but here the
- * quantization interval is known in advance and equal for all processes. To
- * allow for sum of quantized values, we need to make the REPR_RANGE smaller.
- * The this is done by dividing the REPR_RANGE by pow=2^n such that >=comm_sz */
+/* Work exactly like a normal Homomorphic Quantization but here the
+ * quantization interval is known in advance and equal for all processes */
 struct unif_quant *KnownRangeQuantization(float *input, size_t input_size,
                                           MPI_Comm comm, void *struct_ptr) {
   int my_rank, comm_sz;
@@ -15,6 +13,7 @@ struct unif_quant *KnownRangeQuantization(float *input, size_t input_size,
   MPI_Comm_size(comm, &comm_sz);
   struct unif_quant *out = (struct unif_quant *)struct_ptr;
 
+  // this is the default range set in main for the array generator
   out->min = -500;
   out->max = 500;
   // make the REPR_RANGE smaller to allow for reduction additions

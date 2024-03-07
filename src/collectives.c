@@ -6,15 +6,19 @@
 
 /* Custom MPI_Allreduce that will intercept any calls to it.
  * Will look for the environment variable "QUANT_ALGO" and choose
- * the quantization algorithm accordingly (if QUANT_ALGO = NON_LINEAR
- * then also environment variable NON_LINEAR_TYPE will be checked).
- * Once the sendbuf is quantized, it executes a normal Allreduce collective
- * through PMPI_Allreduce.*/
+ * the quantization algorithm and the send structure accordingly
+ * (if QUANT_ALGO = NON_LINEAR then also environment variable
+ * NON_LINEAR_TYPE will be checked).
+ * All reduction calls are put in return for error handling (that
+ * we do not really do, but is partially set up)*/
 int MPI_Allreduce(const void *sendbuf, void *recvbuf, int count,
                   MPI_Datatype datatype, MPI_Op op, MPI_Comm comm) {
+  // Environmental variables are check and put into an enum type object
+  //(defined in tools.h), and passed as parameters for reduction functions
   SEND send_algo;
   QUANT quant_algo;
   GetEnvVariables(&send_algo, &quant_algo);
+
   int my_rank, comm_sz;
   MPI_Comm_rank(comm, &my_rank);
   MPI_Comm_size(comm, &comm_sz);

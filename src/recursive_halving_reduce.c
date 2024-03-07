@@ -8,9 +8,12 @@
 /* Each active node will receive the entire vector of
  * quantized data, dequantize it, sum it with its own vector,
  * requantize the partial sum vector and send it to the next process.
- * For now assumes comm_sz is always divisible by 2. */
+ * IT WORKS WHEN COMM_SZ%2==0*/
 int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, QUANT algo,
                          float *my_numbers, float *recv_buf) {
+  if (comm_sz % 2 != 0)
+    return MPI_ERR_OTHER;
+
   int remaining = comm_sz;
   int half;
   // used to store quantized received bits
@@ -61,6 +64,9 @@ int RecursiveHalvingSend(int my_rank, int comm_sz, int dim, QUANT algo,
 int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count,
                                     QUANT algo, float *sendbuf,
                                     float **recvbuf) {
+  if (comm_sz % 2 != 0)
+    return MPI_ERR_OTHER;
+
   int remaining = comm_sz;
   int half;
 
@@ -91,7 +97,6 @@ int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count,
 
   MPI_Bcast(struct_ptr->vec, count, MPI_UINT8_T, 0, MPI_COMM_WORLD);
 
-  // TODO: use deallocate
   *recvbuf =
       HomomorphicDequantization(struct_ptr->vec, struct_ptr->min,
                                 struct_ptr->max, comm_sz, count, 1, *recvbuf);
@@ -106,6 +111,9 @@ int RecursiveHalvingSendHomomorphic(int my_rank, int comm_sz, int count,
 int RecursiveHalvingSendHomomorphic_16(int my_rank, int comm_sz, int count,
                                        QUANT algo, float *sendbuf,
                                        float **recvbuf) {
+  if (comm_sz % 2 != 0)
+    return MPI_ERR_OTHER;
+
   int remaining = comm_sz;
   int half;
 
@@ -136,7 +144,6 @@ int RecursiveHalvingSendHomomorphic_16(int my_rank, int comm_sz, int count,
 
   MPI_Bcast(struct_ptr->vec, count, MPI_UINT16_T, 0, MPI_COMM_WORLD);
 
-  // TODO: use deallocate
   *recvbuf = HomomorphicDequantization_16(struct_ptr->vec, struct_ptr->min,
                                           struct_ptr->max, comm_sz, count, 1,
                                           *recvbuf);
