@@ -77,9 +77,7 @@ void MinMax(float *vec, size_t lenght, float *min, float *max, int hom_flag);
 
 float sign(float x);
 
-float MeanSquaredError(float *v1, float *v2, size_t lenght);
-
-float NormalizedMSE(float *v1, float *v2, size_t lenght);
+double NormalizedMSE(float *v1, float *v2, size_t lenght);
 
 void ProcessPrinter(void *obj, size_t lenght, int my_rank, int comm_sz, TYPE t);
 

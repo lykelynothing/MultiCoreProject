@@ -1,6 +1,7 @@
 #include <math.h>
 #include <mpi.h>
 #include <omp.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,7 +25,6 @@ void GetEnvVariables(SEND *send_algo, QUANT *quant_algo) {
   quant_env_var = getenv("QUANT_ALGO");
   send_algo_var = getenv("SEND_ALGO");
 
-  // TODO: error handling when var isn't found
   if ((send_algo_var == NULL) | (quant_env_var == NULL) |
       (bits_env_var == NULL)) {
     printf("\nError : at least one environmental variable was not found \n");
@@ -39,8 +39,8 @@ void GetEnvVariables(SEND *send_algo, QUANT *quant_algo) {
   else if (strcmp(send_algo_var, "RING") == 0)
     *send_algo = RING;
   else {
-    printf("\nERROR!! Invalid SEND_ALGO.\n export SEND_ALGO = 1 (ring) | 0 "
-           "(recursive halving) | -1 (no quantization)\n");
+    printf("\nERROR!! Invalid SEND_ALGO.\n export SEND_ALGO=RING | "
+           "REC_HALVING\n");
     return;
   }
 
@@ -60,6 +60,8 @@ void GetEnvVariables(SEND *send_algo, QUANT *quant_algo) {
     return;
   }
 
+  // BITS and REPR_RANGE are global variables and are changed here without the
+  // need to be passed as parameters in other fucntions
   if (bits_env_var != NULL) {
     int bits_env_int = atoi(bits_env_var);
     if (bits_env_int != 8 && bits_env_int != 16) {
@@ -139,31 +141,23 @@ float sign(float x) {
     return -1.0;
 }
 
-// MeanSquaredError between two float arrays
-float MeanSquaredError(float *v1, float *v2, size_t lenght) {
-  float out = 0;
+// Normalized Mean Squared Error
+double NormalizedMSE(float *v1, float *v2, size_t lenght) {
+  double out = 0;
 
 #pragma omp parallel for reduction(+ : out)
-  for (int i = 0; i < lenght; i++)
-    out += (v1[i] - v2[i]) * (v1[i] - v2[i]);
-
-  out = out / (float)lenght;
-
+  for (int i = 0; i < lenght; i++) {
+    double num = (double)((v1[i] - v2[i]) * (v1[i] - v2[i]) / (v1[i] * v1[i]));
+    if (isnan(num) || isinf(num))
+      continue; // Ignore NaN and INF
+    out += num;
+  }
+  out = out / (double)lenght;
   return out;
 }
 
-// MSE but each value it's normalized by its dimension
-float NormalizedMSE(float *v1, float *v2, size_t lenght) {
-  float out = 0;
-
-#pragma omp parallel for reduction(+ : out)
-  for (int i = 0; i < lenght; i++)
-    out += (v1[i] - v2[i]) * (v1[i] - v2[i]) / (v1[i] * v1[i]);
-
-  out = out / (float)lenght;
-  return out;
-}
-
+/* Printer for vectors on different processes, maily used for debugging and
+ * error checking*/
 void ProcessPrinter(void *obj, size_t lenght, int my_rank, int comm_sz,
                     TYPE t) {
   switch (t) {
