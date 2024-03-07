@@ -387,7 +387,7 @@ int Send(void *struct_ptr, QUANT algo, int dim, int dest) {
 }
 
 void *Allocate(QUANT algo, int count) {
-  void *void_ptr;
+  void *void_ptr = NULL;
   if (BITS == 8) {
     switch (algo) {
     case LLOYD: {
