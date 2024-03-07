@@ -1,7 +1,6 @@
 #include <math.h>
 #include <mpi.h>
 #include <omp.h>
-#include <stdio.h>
 
 #include "tools.h"
 
