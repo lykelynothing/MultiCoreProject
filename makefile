@@ -1,5 +1,5 @@
 CC = mpicc
-CFLAGS = -g -O3 -Wall -Werror -Wno-unknown-pragmas -Wno-maybe-uninitialized -fopenmp 
+CFLAGS = -g -O3 -Wall  -Wno-unknown-pragmas -Wno-maybe-uninitialized -fopenmp 
 LDFLAGS = -lm
 
 SRC_DIR = src
